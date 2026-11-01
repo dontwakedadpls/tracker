@@ -262,6 +262,7 @@ dialog.mini{max-height:92svh;overflow:auto}
 .unitfield{margin-top:10px}
 .convnote{text-align:center;margin-top:7px;min-height:1.35em}
 .pedit{display:block;margin:4px auto 0;color:var(--ac);font-size:.8125rem;font-weight:700;padding:5px 10px}
+.label-dialog{max-height:90vh;overflow-y:auto}.label-dialog input{width:100%}
 .sheet .unitfield label,#ed .unitfield label{margin-top:0}
 </style>
 </head>
@@ -452,6 +453,7 @@ SOFTWARE.
     <p class="sub convnote" id="pgrams" role="status"></p>
     <div class="chips" id="pch"></div>
     <div class="tot"><b id="ptk"></b><span id="ptm"></span></div>
+    <button class="pedit" id="label-edit" type="button" hidden>Edit label values</button>
     <div class="seg mealseg" aria-label="Meal" style="margin-bottom:0"></div>
     <button class="btn pri full" id="pgo" type="button">Add to <span class="mname"></span></button>
   </div>
@@ -524,6 +526,19 @@ SOFTWARE.
       <p class="sub" style="margin-top:10px">Tap a day to open it in Today.</p></div>
   </div></dialog>
 
+<dialog class="mini label-dialog" id="label-dialog" aria-labelledby="label-title">
+  <h2 id="label-title" style="margin-top:0">Edit label values</h2>
+  <p class="sub" id="label-basis"></p>
+  <p class="sub">First match the amount and grams per unit to the package serving. Then enter the label values for that amount. Existing diary entries won’t change.</p>
+  <label for="label-k">Calories (cal)</label><input id="label-k" type="number" inputmode="decimal" min="0" step="any">
+  <label for="label-p">Protein (g)</label><input id="label-p" type="number" inputmode="decimal" min="0" step="any">
+  <label for="label-c">Carbs (g)</label><input id="label-c" type="number" inputmode="decimal" min="0" step="any">
+  <label for="label-f">Fat (g)</label><input id="label-f" type="number" inputmode="decimal" min="0" step="any">
+  <p class="msg" id="label-msg" role="status"></p>
+  <div class="row" style="margin-top:12px"><button class="btn" id="label-cancel" type="button">Cancel</button><button class="btn pri" id="label-save" type="button">Save values</button></div>
+  <button class="pedit" id="label-reset" type="button" hidden>Use database values instead</button>
+</dialog>
+
 <dialog class="mini" id="bk" aria-labelledby="bkt"><h2 id="bkt" style="margin-top:0">Restore backup</h2>
   <p class="sub">Paste a copied backup or choose a backup file. Restoring <b>replaces all data currently in the app</b> — you'll get an Undo just in case.</p>
   <label for="bk-t">Backup text</label><textarea id="bk-t" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="Paste backup here"></textarea>
@@ -551,7 +566,7 @@ SOFTWARE.
 "use strict";
 var $=function(s){return document.querySelector(s)},$$=function(s){return Array.prototype.slice.call(document.querySelectorAll(s))};
 var KEY="plate-v1",MEALS=["Breakfast","Lunch","Dinner","Snacks"],RM=matchMedia("(prefers-reduced-motion:reduce)").matches;
-var S={goal:{k:1950,p:190,c:170,f:55,u:"lb",w:0},log:{},weights:[],recipes:[],foods:[],icons:{},barcodeServings:{},profile:{sex:"female",age:0,h:0,wkg:0,act:"1.55",pace:-500,style:"balanced"}};
+var S={goal:{k:1950,p:190,c:170,f:55,u:"lb",w:0},log:{},weights:[],recipes:[],foods:[],icons:{},barcodeServings:{},barcodeNutrition:{},profile:{sex:"female",age:0,h:0,wkg:0,act:"1.55",pace:-500,style:"balanced"}};
 try{var raw=localStorage.getItem(KEY);if(raw)S=Object.assign(S,JSON.parse(raw))}catch(e){}
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
 function dk(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")}
@@ -800,8 +815,8 @@ function commit(e){var id=Date.now()+Math.random();e.id=id;if(FICON[e.ic])setIco
 function addEntry(n,k,p,c,f,q,img,ic,gu){return commit({n:n,k:k,p:p,c:c,f:f,q:q,gu:cleanGu(gu),i:img||"",ic:FICON[ic]?ic:""})}
 
 /* Scanner */
-var digitReading=false,digitReview=false,digitEpoch=0,ocrLoader=null,autoTimer=null,autoCandidate="",autoRejected="";
-function stopCam(){clearTimeout(autoTimer);autoTimer=null;autoCandidate="";digitEpoch++;digitReading=false;digitReview=false;$("#read-digits").disabled=false;if(reader){try{reader.reset()}catch(e){}reader=null}var v=$("#vid");if(v.srcObject){v.srcObject.getTracks().forEach(function(t){t.stop()});v.srcObject=null}}
+var digitReading=false,digitReview=false,digitEpoch=0,ocrLoader=null,autoTimer=null,autoCandidate="",autoRejected="",digitWorker=null;
+function stopCam(){clearTimeout(autoTimer);autoTimer=null;autoCandidate="";digitEpoch++;var oldWorker=digitWorker;digitWorker=null;if(oldWorker&&!digitReading)oldWorker.terminate().catch(function(){});digitReading=false;digitReview=false;$("#read-digits").disabled=false;if(reader){try{reader.reset()}catch(e){}reader=null}var v=$("#vid");if(v.srcObject){v.srcObject.getTracks().forEach(function(t){t.stop()});v.srcObject=null}}
 function startCam(){
   if(reader)return;
   if(!window.ZXing||!navigator.mediaDevices){smsg("Scanning needs HTTPS. Type the barcode below.",1);return}
@@ -815,34 +830,37 @@ function startCam(){
 function loadDigitOCR(){if(window.Tesseract)return Promise.resolve(window.Tesseract);if(ocrLoader)return ocrLoader;
   ocrLoader=new Promise(function(resolve,reject){var tag=el("script"),timer=setTimeout(function(){tag.remove();reject(new Error("OCR load timeout"))},30000);
     tag.src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js";tag.onload=function(){clearTimeout(timer);window.Tesseract?resolve(window.Tesseract):reject(new Error("OCR unavailable"))};tag.onerror=function(){clearTimeout(timer);tag.remove();reject(new Error("OCR load failed"))};document.head.appendChild(tag)}).catch(function(e){ocrLoader=null;throw e});return ocrLoader}
+async function getDigitWorker(T,epoch){if(digitWorker)return digitWorker;var w=await T.createWorker("eng");
+  try{if(epoch!==digitEpoch){await w.terminate();return null}await w.setParameters({tessedit_char_whitelist:"0123456789",tessedit_pageseg_mode:"7"});if(epoch!==digitEpoch){await w.terminate();return null}digitWorker=w;return w}
+  catch(e){try{await w.terminate()}catch(ignore){}throw e}}
 function validBarcodeCheck(code){if(!/^(?:\d{8}|\d{12,14})$/.test(code))return false;var sum=0;for(var i=code.length-2,weight=3;i>=0;i--,weight=4-weight)sum+=Number(code[i])*weight;return (10-sum%10)%10===Number(code[code.length-1])}
 function extractDigits(text){var lines=String(text||"").split(/\r?\n/),candidates=[];lines.forEach(function(line){var n=line.replace(/\D/g,"");if(n.length>=6&&n.length<=14&&candidates.indexOf(n)<0)candidates.push(n)});
   candidates.sort(function(a,b){return Number(validBarcodeCheck(b))-Number(validBarcodeCheck(a))});return candidates[0]||""}
 function digitCanvas(video,lower){var vr=video.getBoundingClientRect(),fr=$("#frame").getBoundingClientRect(),scale=Math.max(vr.width/video.videoWidth,vr.height/video.videoHeight),ox=(vr.width-video.videoWidth*scale)/2,oy=(vr.height-video.videoHeight*scale)/2;
   var sx=Math.max(0,(fr.left-vr.left-ox)/scale),sy=Math.max(0,(fr.top+fr.height*(lower?.5:.22)-vr.top-oy)/scale),sw=Math.min(video.videoWidth-sx,fr.width/scale),sh=Math.min(video.videoHeight-sy,fr.height*(lower?.9:.56)/scale);
-  if(!(sw>0&&sh>0))throw new Error("Camera frame unavailable");var canvas=el("canvas");canvas.width=Math.max(1200,Math.round(sw));canvas.height=Math.round(canvas.width*sh/sw);canvas.getContext("2d").drawImage(video,sx,sy,sw,sh,0,0,canvas.width,canvas.height);return canvas}
+  if(!(sw>0&&sh>0))throw new Error("Camera frame unavailable");var canvas=el("canvas");canvas.width=Math.min(1200,Math.max(900,Math.round(sw)));canvas.height=Math.round(canvas.width*sh/sw);canvas.getContext("2d").drawImage(video,sx,sy,sw,sh,0,0,canvas.width,canvas.height);return canvas}
 function scheduleDigits(ms){clearTimeout(autoTimer);autoTimer=setTimeout(autoReadDigits,ms)}
 async function autoReadDigits(){autoTimer=null;if(!scanMode||!reader||pend||digitReview)return;var video=$("#vid");
   if(digitReading||document.activeElement===$("#bc")||$("#bc").value.trim()||!video.srcObject||!video.videoWidth||!video.videoHeight){scheduleDigits(3000);return}
   digitReading=true;$("#read-digits").disabled=true;var epoch=digitEpoch,worker=null,next=9000;
   try{var lower=digitCanvas(video,true),middle=digitCanvas(video,false);smsg("Scanning barcode and checking printed numbers…");var T=await loadDigitOCR();if(epoch!==digitEpoch)return;
-    worker=await T.createWorker("eng");if(epoch!==digitEpoch)return;await worker.setParameters({tessedit_char_whitelist:"0123456789",tessedit_pageseg_mode:"7"});
+    worker=await getDigitWorker(T,epoch);if(!worker||epoch!==digitEpoch)return;
     var res=await worker.recognize(lower);if(epoch!==digitEpoch)return;var code=extractDigits(res&&res.data&&res.data.text);
     if(!validBarcodeCheck(code)){res=await worker.recognize(middle);if(epoch!==digitEpoch)return;code=extractDigits(res&&res.data&&res.data.text)}
     if(validBarcodeCheck(code)&&code!==autoRejected){if(code===autoCandidate){stopCam();$("#bc").value=code;lookup(code,true);return}autoCandidate=code;next=2000;smsg("Checking printed numbers again…")}
     else{autoCandidate="";smsg("Still scanning. Keep the barcode and numbers in view.")}
   }catch(e){if(epoch===digitEpoch){autoCandidate="";smsg("Still scanning. You can also type the barcode below.")}}
-  finally{if(worker)try{await worker.terminate()}catch(e){}if(epoch===digitEpoch){digitReading=false;$("#read-digits").disabled=false;if(scanMode&&!digitReview)scheduleDigits(next)}}}
+  finally{if(worker&&epoch!==digitEpoch)try{await worker.terminate()}catch(e){}if(epoch===digitEpoch){digitReading=false;$("#read-digits").disabled=false;if(scanMode&&!digitReview)scheduleDigits(next)}}}
 $("#read-digits").onclick=async function(){if(digitReading)return;var video=$("#vid");if(!video.srcObject||!video.videoWidth||!video.videoHeight){digitReview=false;startCam();smsg("Aim the numbers inside the frame, then tap Read numbers.");return}
   digitReading=true;digitReview=true;this.disabled=true;var epoch=digitEpoch,worker=null;
   try{var canvas=digitCanvas(video,false);
     smsg("Reading numbers… first use may take a moment.");var T=await loadDigitOCR();if(epoch!==digitEpoch)return;
-    worker=await T.createWorker("eng");if(epoch!==digitEpoch)return;await worker.setParameters({tessedit_char_whitelist:"0123456789",tessedit_pageseg_mode:"7"});
+    worker=await getDigitWorker(T,epoch);if(!worker||epoch!==digitEpoch)return;
     var result=await worker.recognize(canvas);if(epoch!==digitEpoch)return;var code=extractDigits(result&&result.data&&result.data.text);
     if(code){$("#bc").value=code;smsg("Check every digit below, then tap Look up. Edit any mistakes.")}
     else smsg("Couldn’t read the numbers. Aim them inside the frame and try again, or type them below.",1);
   }catch(e){if(epoch===digitEpoch)smsg("Couldn’t read the numbers. Check your connection and try again, or type them below.",1)}
-  finally{if(worker)try{await worker.terminate()}catch(e){}if(epoch===digitEpoch){digitReading=false;$("#read-digits").disabled=false}}};
+  finally{if(worker&&epoch!==digitEpoch)try{await worker.terminate()}catch(e){}if(epoch===digitEpoch){digitReading=false;$("#read-digits").disabled=false}}};
 $("#bcgo").onclick=function(){lookup($("#bc").value.trim())};
 $("#bc").onkeydown=function(e){if(e.key==="Enter")$("#bcgo").click()};
 
@@ -859,6 +877,9 @@ function lookup(code,fromOCR){
     var f=j.status===1&&norm(j.product);
     if(!f){if(fromOCR)autoRejected=code;smsg("No nutrition data for that barcode. Try Search or type the number.",1);setTimeout(function(){if(scanMode&&!pend)startCam()},1600);return}
     f.barcode=code;f.ocr=!!fromOCR;smsg("Found it.");show(f)}).catch(function(){smsg("Could not reach Open Food Facts. Check your connection.",1);if(scanMode)startCam()})}
+function barcodeKey(code){code=String(code||"");return /^\d{6,14}$/.test(code)?code.padStart(14,"0"):""}
+function validNutrition(n){return n&&["k","p","c","f"].every(function(x){return typeof n[x]==="number"&&isFinite(n[x])&&n[x]>=0&&n[x]<=10000000})}
+function productInfo(){if(!pend)return;$("#pi").textContent=(pend.b?pend.b+". ":"")+(pend.ss?"Serving: "+pend.ss+". ":"")+r0(pend.k)+" cal per 100g"+(pend.corrected?" · Your label values":"")+(pend.ocr?". Check printed barcode: "+pend.barcode:"")}
 function pDefaultGu(u){if(!pend)return defaultGu(u);if(u==="serving")return pend.sv||100;if(u==="scoop")return pend.sv||30;if(u==="each")return pend.sv||50;return defaultGu(u)}
 var pPreviousUnit="g";
 function pGu(unit){if(!pend)return 0;var u=unit||$("#pu").value||"g",d=unitDef(u);if(u==="serving")return parseFloat($("#pconv").value)||pend.sv||100;return(d.type==="volume"||d.type==="count")?(parseFloat($("#pconv").value)||0):(d.g||0)}
@@ -868,9 +889,12 @@ function syncPUnit(setDefault){var u=$("#pu").value||"g",d=unitDef(u),needs=d.ty
   if(needs){$("#pconv-lbl").textContent="Grams per "+unitShort(u,1);if(setDefault||!$("#pconv").value)$("#pconv").value=fmtAmt(pDefaultGu(u))}pPreviousUnit=u;upd()}
 $("#pedit").onclick=function(){var open=$("#pconvwrap").hidden;$("#pconvwrap").hidden=!open;this.setAttribute("aria-expanded",String(open));this.textContent=open?"Done":"Edit grams per unit";if(open)$("#pconv").focus()};
 function show(f){pend=f;stopCam();var im=$("#pimg");im.textContent="";im.appendChild(thumb(f.i,f.n,64));
+  f.baseNutrition={k:f.k,p:f.p,c:f.c,f:f.f};var key=barcodeKey(f.barcode),custom=key&&S.barcodeNutrition&&S.barcodeNutrition[key];
+  if(validNutrition(custom)){f.k=custom.k;f.p=custom.p;f.c=custom.c;f.f=custom.f;f.corrected=true}else f.corrected=false;
+  $("#label-edit").hidden=!key;
   var inf=inferProductServing(f),pref=f.barcode&&S.barcodeServings&&S.barcodeServings[f.barcode];
   if(pref&&UNIT[pref.u]&&Number(pref.a)>0&&isFinite(Number(pref.a))&&cleanGu(pref.gu))inf={a:Number(pref.a),u:pref.u,gu:cleanGu(pref.gu)};
-  $("#pn").textContent=f.n;$("#pi").textContent=(f.b?f.b+". ":"")+(f.ss?"Serving: "+f.ss+". ":"")+r0(f.k)+" cal per 100g"+(f.ocr?". Check printed barcode: "+f.barcode:"");
+  $("#pn").textContent=f.n;productInfo();
   fillUnitSelect($("#pu"),inf.u);$("#pconv").value=inf.gu>0?fmtAmt(inf.gu):"";
   var c=$("#pch");c.textContent="";
   [50,100].forEach(function(g){var b=el("button",null,g+"g");b.type="button";b.onclick=function(){$("#pu").value="g";$("#pg").value=g;syncPUnit(true)};c.appendChild(b)});
@@ -884,6 +908,19 @@ function upd(){if(!pend)return;var a=parseFloat($("#pg").value)||0,u=$("#pu").va
   else if(u==="g")note.textContent="";
   else if(u==="serving")note.textContent="= "+r0(grams)+"g"+(pend.sv?" (1 serving = "+fmtAmt(pend.sv)+"g)":"");
   else note.textContent="≈ "+r0(grams)+"g ("+fmtAmt(gu)+"g per "+unitShort(u,1)+")"}
+var labelInitial=null,labelBasisGrams=0;
+$("#label-edit").onclick=function(){if(!pend||!barcodeKey(pend.barcode))return;var a=parseFloat($("#pg").value),gu=pGu(),grams=a*gu;
+  if(!(a>0&&gu>0&&isFinite(grams))){toast("Enter a valid amount and grams per unit first");return}
+  labelBasisGrams=grams;$("#label-basis").textContent="Values for "+formatQ(a,$("#pu").value||"g")+" (≈ "+fmtAmt(grams)+" g).";
+  labelInitial={};["k","p","c","f"].forEach(function(key){var v=Number((pend[key]*grams/100).toFixed(2));$("#label-"+key).value=String(v);labelInitial[key]=String(v)});
+  $("#label-msg").textContent="";$("#label-reset").hidden=!pend.corrected;$("#label-dialog").showModal()};
+$("#label-cancel").onclick=function(){$("#label-dialog").close()};
+$("#label-reset").onclick=function(){if(!pend)return;var key=barcodeKey(pend.barcode);if(key&&S.barcodeNutrition)delete S.barcodeNutrition[key];var b=pend.baseNutrition;pend.k=b.k;pend.p=b.p;pend.c=b.c;pend.f=b.f;pend.corrected=false;save();productInfo();upd();$("#label-dialog").close()};
+$("#label-save").onclick=function(){if(!pend||!labelInitial||!(labelBasisGrams>0))return;var n={},invalid=false;
+  ["k","p","c","f"].forEach(function(key){var raw=$("#label-"+key).value.trim(),v=Number(raw);if(raw===""||!isFinite(v)||v<0||v>100000){invalid=true;return}n[key]=raw===labelInitial[key]?pend[key]:v*100/labelBasisGrams});
+  if(invalid||!validNutrition(n)){$("#label-msg").textContent="Enter a valid nonnegative number for each value.";$("#label-msg").className="msg err";return}
+  var code=barcodeKey(pend.barcode);if(!code)return;if(!S.barcodeNutrition||typeof S.barcodeNutrition!=="object"||Array.isArray(S.barcodeNutrition))S.barcodeNutrition={};S.barcodeNutrition[code]=n;
+  pend.k=n.k;pend.p=n.p;pend.c=n.c;pend.f=n.f;pend.corrected=true;save();productInfo();upd();$("#label-dialog").close();toast("Label values saved")};
 $("#pg").oninput=upd;$("#pconv").oninput=upd;
 $("#pu").addEventListener("change",function(){var previous=pPreviousUnit,oldGu=pGu(previous),old=pGrams(previous),next=$("#pu").value||"g",from=unitDef(previous),to=unitDef(next);syncPUnit(true);
   /* A volume-to-volume conversion keeps the food's known density rather than
@@ -1263,7 +1300,7 @@ function cleanBackup(txt){var o;try{o=JSON.parse(txt)}catch(e){return null}
   function food(e){if(!e||typeof e!=="object")return null;
     return{id:Number(e.id)||Math.random(),n:str(e.n,120)||"Food",k:num(e.k,10000),p:num(e.p,10000),c:num(e.c,10000),f:num(e.f,10000),q:str(e.q,40)||"1 serving",gu:num(e.gu,100000),i:img(e.i),ic:FICON[e.ic]?e.ic:""}}
   var g=(o.goal&&typeof o.goal==="object")?o.goal:{},entriesN=0;
-  var data={goal:{k:num(g.k,20000)||1950,p:num(g.p,5000),c:num(g.c,5000),f:num(g.f,5000),u:g.u==="kg"?"kg":"lb",w:num(g.w,2000)},log:{},weights:[],recipes:[],foods:[],icons:{},barcodeServings:{},profile:{sex:"female",age:0,h:0,wkg:0,act:"1.55",pace:-500,style:"balanced"}};
+  var data={goal:{k:num(g.k,20000)||1950,p:num(g.p,5000),c:num(g.c,5000),f:num(g.f,5000),u:g.u==="kg"?"kg":"lb",w:num(g.w,2000)},log:{},weights:[],recipes:[],foods:[],icons:{},barcodeServings:{},barcodeNutrition:{},profile:{sex:"female",age:0,h:0,wkg:0,act:"1.55",pace:-500,style:"balanced"}};
   if(o.log&&typeof o.log==="object")Object.keys(o.log).forEach(function(d){if(!isd(d)||!Array.isArray(o.log[d]))return;
     var arr=o.log[d].slice(0,500).map(function(e){var f=food(e);if(f)f.m=MEALS.indexOf(e&&e.m)>=0?e.m:"Snacks";return f}).filter(Boolean);
     if(arr.length){data.log[d]=arr;entriesN+=arr.length}});
@@ -1283,6 +1320,7 @@ function cleanBackup(txt){var o;try{o=JSON.parse(txt)}catch(e){return null}
     data.recipes.forEach(function(r){r.ing.forEach(addf)});
     data.foods=data.foods.slice(0,1000)})();
   if(o.barcodeServings&&typeof o.barcodeServings==="object"&&!Array.isArray(o.barcodeServings))Object.keys(o.barcodeServings).slice(0,10000).forEach(function(code){var v=o.barcodeServings[code];if(!/^\d{6,14}$/.test(code)||!v||typeof v!=="object"||!Object.prototype.hasOwnProperty.call(UNIT,v.u))return;var a=Number(v.a),gu=cleanGu(v.gu);if(isFinite(a)&&a>0&&a<=100000&&gu)data.barcodeServings[code]={a:a,u:v.u,gu:gu}});
+  if(o.barcodeNutrition&&typeof o.barcodeNutrition==="object"&&!Array.isArray(o.barcodeNutrition))Object.keys(o.barcodeNutrition).slice(0,10000).forEach(function(code){var key=barcodeKey(code),v=o.barcodeNutrition[code];if(key&&validNutrition(v))data.barcodeNutrition[key]={k:v.k,p:v.p,c:v.c,f:v.f}});
   if(o.icons&&typeof o.icons==="object")Object.keys(o.icons).slice(0,1000).forEach(function(k){var kk=str(k,120).trim().toLowerCase();if(kk&&FICON[o.icons[k]])data.icons[kk]=o.icons[k]});
   if(o.profile&&typeof o.profile==="object"){var pr=o.profile,acts=["1.2","1.375","1.55","1.725","1.9"],paces=[-1000,-750,-500,-250,0,250,500];
     data.profile={sex:pr.sex==="male"?"male":"female",age:num(pr.age,120),h:num(pr.h,300),wkg:num(pr.wkg,1000),
@@ -1309,5 +1347,5 @@ syncFoodDb();save();setMeal(meal);view("diary");
 if(/^#recipe=/.test(location.hash)){var code=location.hash;history.replaceState(null,"",location.pathname+location.search);view("recipes");showImport(code)}
 })();
 </script>
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a53e69a03fc5b1b0',t:'MTc5MzU3Mjk0NQ=='};var l=window.parent.location,o;try{o=new URL(l.origin).origin}catch(e){try{o=new URL(new URL(l.href).origin).origin}catch(e){o=''}}var u='/cdn-cgi/challenge-platform/scripts/jsd/main.js?ray=a53e69a03fc5b1b0',a=document.createElement('script');a.src=o?new URL(u,o).href:u;document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a53eab8eeda62e51',t:'MTc5MzU3NTY0Ng=='};var l=window.parent.location,o;try{o=new URL(l.origin).origin}catch(e){try{o=new URL(new URL(l.href).origin).origin}catch(e){o=''}}var u='/cdn-cgi/challenge-platform/scripts/jsd/main.js?ray=a53eab8eeda62e51',a=document.createElement('script');a.src=o?new URL(u,o).href:u;document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
