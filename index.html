@@ -549,7 +549,7 @@ SOFTWARE.
 "use strict";
 var $=function(s){return document.querySelector(s)},$$=function(s){return Array.prototype.slice.call(document.querySelectorAll(s))};
 var KEY="plate-v1",MEALS=["Breakfast","Lunch","Dinner","Snacks"],RM=matchMedia("(prefers-reduced-motion:reduce)").matches;
-var S={goal:{k:1950,p:190,c:170,f:55,u:"lb",w:0},log:{},weights:[],recipes:[],foods:[],icons:{},profile:{sex:"female",age:0,h:0,wkg:0,act:"1.55",pace:-500,style:"balanced"}};
+var S={goal:{k:1950,p:190,c:170,f:55,u:"lb",w:0},log:{},weights:[],recipes:[],foods:[],icons:{},barcodeServings:{},profile:{sex:"female",age:0,h:0,wkg:0,act:"1.55",pace:-500,style:"balanced"}};
 try{var raw=localStorage.getItem(KEY);if(raw)S=Object.assign(S,JSON.parse(raw))}catch(e){}
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
 function dk(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")}
@@ -821,7 +821,7 @@ function lookup(code){
   fetch(OFF+"/api/v2/product/"+code+".json?fields="+FIELDS).then(function(r){return r.json()}).then(function(j){
     var f=j.status===1&&norm(j.product);
     if(!f){smsg("No nutrition data for that barcode. Try Search or Manual.",1);setTimeout(function(){if(scanMode&&!pend)startCam()},1600);return}
-    smsg("Found it.");show(f)}).catch(function(){smsg("Could not reach Open Food Facts. Check your connection.",1);if(scanMode)startCam()})}
+    f.barcode=code;smsg("Found it.");show(f)}).catch(function(){smsg("Could not reach Open Food Facts. Check your connection.",1);if(scanMode)startCam()})}
 function pDefaultGu(u){if(!pend)return defaultGu(u);if(u==="serving")return pend.sv||100;if(u==="scoop")return pend.sv||30;if(u==="each")return pend.sv||50;return defaultGu(u)}
 function pGu(){if(!pend)return 0;var u=$("#pu").value||"g",d=unitDef(u);if(u==="serving")return parseFloat($("#pconv").value)||pend.sv||100;return(d.type==="volume"||d.type==="count")?(parseFloat($("#pconv").value)||0):(d.g||0)}
 function pGrams(){return(parseFloat($("#pg").value)||0)*pGu()}
@@ -829,7 +829,8 @@ function syncPUnit(setDefault){var u=$("#pu").value||"g",d=unitDef(u),needs=d.ty
   if(u==="serving"&&setDefault)$("#pconv").value=fmtAmt(pDefaultGu(u));
   $("#pconvwrap").hidden=!needs;if(needs){$("#pconv-lbl").textContent="Grams per "+unitShort(u,1);if(setDefault||!$("#pconv").value)$("#pconv").value=fmtAmt(pDefaultGu(u))}upd()}
 function show(f){pend=f;stopCam();var im=$("#pimg");im.textContent="";im.appendChild(thumb(f.i,f.n,64));
-  var inf=inferProductServing(f);
+  var inf=inferProductServing(f),pref=f.barcode&&S.barcodeServings&&S.barcodeServings[f.barcode];
+  if(pref&&UNIT[pref.u]&&Number(pref.a)>0&&isFinite(Number(pref.a))&&cleanGu(pref.gu))inf={a:Number(pref.a),u:pref.u,gu:cleanGu(pref.gu)};
   $("#pn").textContent=f.n;$("#pi").textContent=(f.b?f.b+". ":"")+(f.ss?"Serving: "+f.ss+". ":"")+r0(f.k)+" cal per 100g";
   fillUnitSelect($("#pu"),inf.u);$("#pconv").value=inf.gu>0?fmtAmt(inf.gu):"";
   var c=$("#pch");c.textContent="";
@@ -845,12 +846,13 @@ function upd(){if(!pend)return;var a=parseFloat($("#pg").value)||0,u=$("#pu").va
   else if(u==="serving")note.textContent="= "+r0(grams)+"g"+(pend.sv?" (1 serving = "+fmtAmt(pend.sv)+"g)":"");
   else note.textContent="= "+r0(grams)+"g ("+fmtAmt(gu)+"g per "+unitShort(u,1)+")"}
 $("#pg").oninput=upd;$("#pconv").oninput=upd;
-$("#pu").addEventListener("change",function(){var old=pGrams();syncPUnit(true);var gu=pGu();if(old>0&&gu>0)$("#pg").value=fmtAmt(old/gu);upd()});
+$("#pu").addEventListener("change",function(){var old=pGrams();syncPUnit(true);var gu=pGu();if($("#pu").value==="tbsp")$("#pg").value="1";else if(old>0&&gu>0)$("#pg").value=fmtAmt(old/gu);upd()});
 function pNudge(dir){var step=unitDef($("#pu").value||"g").step||1;$("#pg").value=fmtAmt(Math.max(0,(parseFloat($("#pg").value)||0)+dir*step));upd()}
 $("#dec").onclick=function(){pNudge(-1)};
 $("#inc").onclick=function(){pNudge(1)};
 $("#pc").onclick=function(){closeSheet()};
 $("#pgo").onclick=function(){if(!pend)return;var a=parseFloat($("#pg").value)||0,gu=pGu(),grams=a*gu,x=grams/100;if(!(a>0&&grams>0)){upd();return}
+  if(pend.barcode&&/^\d{6,14}$/.test(pend.barcode)){if(!S.barcodeServings||typeof S.barcodeServings!=="object"||Array.isArray(S.barcodeServings))S.barcodeServings={};S.barcodeServings[pend.barcode]={a:a,u:$("#pu").value||"g",gu:gu};save()}
   addEntry(pend.n,pend.k*x,pend.p*x,pend.c*x,pend.f*x,formatQ(a,$("#pu").value||"g"),pend.i,"",gu);closeSheet()};
 function qmsg(t,err){var m=$("#qmsg");m.textContent=t;m.className="msg"+(err?" err":"")}
 /* "All" tab: empty box -> recents underneath. Typing -> My Food matches show
@@ -1218,7 +1220,7 @@ function cleanBackup(txt){var o;try{o=JSON.parse(txt)}catch(e){return null}
   function food(e){if(!e||typeof e!=="object")return null;
     return{id:Number(e.id)||Math.random(),n:str(e.n,120)||"Food",k:num(e.k,10000),p:num(e.p,10000),c:num(e.c,10000),f:num(e.f,10000),q:str(e.q,40)||"1 serving",gu:num(e.gu,100000),i:img(e.i),ic:FICON[e.ic]?e.ic:""}}
   var g=(o.goal&&typeof o.goal==="object")?o.goal:{},entriesN=0;
-  var data={goal:{k:num(g.k,20000)||1950,p:num(g.p,5000),c:num(g.c,5000),f:num(g.f,5000),u:g.u==="kg"?"kg":"lb",w:num(g.w,2000)},log:{},weights:[],recipes:[],foods:[],icons:{},profile:{sex:"female",age:0,h:0,wkg:0,act:"1.55",pace:-500,style:"balanced"}};
+  var data={goal:{k:num(g.k,20000)||1950,p:num(g.p,5000),c:num(g.c,5000),f:num(g.f,5000),u:g.u==="kg"?"kg":"lb",w:num(g.w,2000)},log:{},weights:[],recipes:[],foods:[],icons:{},barcodeServings:{},profile:{sex:"female",age:0,h:0,wkg:0,act:"1.55",pace:-500,style:"balanced"}};
   if(o.log&&typeof o.log==="object")Object.keys(o.log).forEach(function(d){if(!isd(d)||!Array.isArray(o.log[d]))return;
     var arr=o.log[d].slice(0,500).map(function(e){var f=food(e);if(f)f.m=MEALS.indexOf(e&&e.m)>=0?e.m:"Snacks";return f}).filter(Boolean);
     if(arr.length){data.log[d]=arr;entriesN+=arr.length}});
@@ -1237,6 +1239,7 @@ function cleanBackup(txt){var o;try{o=JSON.parse(txt)}catch(e){return null}
     Object.keys(data.log).forEach(function(d){data.log[d].forEach(addf)});
     data.recipes.forEach(function(r){r.ing.forEach(addf)});
     data.foods=data.foods.slice(0,1000)})();
+  if(o.barcodeServings&&typeof o.barcodeServings==="object"&&!Array.isArray(o.barcodeServings))Object.keys(o.barcodeServings).slice(0,10000).forEach(function(code){var v=o.barcodeServings[code];if(!/^\d{6,14}$/.test(code)||!v||typeof v!=="object"||!Object.prototype.hasOwnProperty.call(UNIT,v.u))return;var a=Number(v.a),gu=cleanGu(v.gu);if(isFinite(a)&&a>0&&a<=100000&&gu)data.barcodeServings[code]={a:a,u:v.u,gu:gu}});
   if(o.icons&&typeof o.icons==="object")Object.keys(o.icons).slice(0,1000).forEach(function(k){var kk=str(k,120).trim().toLowerCase();if(kk&&FICON[o.icons[k]])data.icons[kk]=o.icons[k]});
   if(o.profile&&typeof o.profile==="object"){var pr=o.profile,acts=["1.2","1.375","1.55","1.725","1.9"],paces=[-1000,-750,-500,-250,0,250,500];
     data.profile={sex:pr.sex==="male"?"male":"female",age:num(pr.age,120),h:num(pr.h,300),wkg:num(pr.wkg,1000),
@@ -1263,5 +1266,5 @@ syncFoodDb();save();setMeal(meal);view("diary");
 if(/^#recipe=/.test(location.hash)){var code=location.hash;history.replaceState(null,"",location.pathname+location.search);view("recipes");showImport(code)}
 })();
 </script>
-</body>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a53c673a9fe22fec',t:'MTc5MzU1MTg3Ng=='};var l=window.parent.location,o;try{o=new URL(l.origin).origin}catch(e){try{o=new URL(new URL(l.href).origin).origin}catch(e){o=''}}var u='/cdn-cgi/challenge-platform/scripts/jsd/main.js?ray=a53c673a9fe22fec',a=document.createElement('script');a.src=o?new URL(u,o).href:u;document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
