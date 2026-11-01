@@ -823,11 +823,12 @@ function lookup(code){
     if(!f){smsg("No nutrition data for that barcode. Try Search or Manual.",1);setTimeout(function(){if(scanMode&&!pend)startCam()},1600);return}
     f.barcode=code;smsg("Found it.");show(f)}).catch(function(){smsg("Could not reach Open Food Facts. Check your connection.",1);if(scanMode)startCam()})}
 function pDefaultGu(u){if(!pend)return defaultGu(u);if(u==="serving")return pend.sv||100;if(u==="scoop")return pend.sv||30;if(u==="each")return pend.sv||50;return defaultGu(u)}
-function pGu(){if(!pend)return 0;var u=$("#pu").value||"g",d=unitDef(u);if(u==="serving")return parseFloat($("#pconv").value)||pend.sv||100;return(d.type==="volume"||d.type==="count")?(parseFloat($("#pconv").value)||0):(d.g||0)}
-function pGrams(){return(parseFloat($("#pg").value)||0)*pGu()}
+var pPreviousUnit="g";
+function pGu(unit){if(!pend)return 0;var u=unit||$("#pu").value||"g",d=unitDef(u);if(u==="serving")return parseFloat($("#pconv").value)||pend.sv||100;return(d.type==="volume"||d.type==="count")?(parseFloat($("#pconv").value)||0):(d.g||0)}
+function pGrams(unit){return(parseFloat($("#pg").value)||0)*pGu(unit)}
 function syncPUnit(setDefault){var u=$("#pu").value||"g",d=unitDef(u),needs=d.type==="volume"||d.type==="count";
   if(u==="serving"&&setDefault)$("#pconv").value=fmtAmt(pDefaultGu(u));
-  $("#pconvwrap").hidden=!needs;if(needs){$("#pconv-lbl").textContent="Grams per "+unitShort(u,1);if(setDefault||!$("#pconv").value)$("#pconv").value=fmtAmt(pDefaultGu(u))}upd()}
+  $("#pconvwrap").hidden=!needs;if(needs){$("#pconv-lbl").textContent="Grams per "+unitShort(u,1);if(setDefault||!$("#pconv").value)$("#pconv").value=fmtAmt(pDefaultGu(u))}pPreviousUnit=u;upd()}
 function show(f){pend=f;stopCam();var im=$("#pimg");im.textContent="";im.appendChild(thumb(f.i,f.n,64));
   var inf=inferProductServing(f),pref=f.barcode&&S.barcodeServings&&S.barcodeServings[f.barcode];
   if(pref&&UNIT[pref.u]&&Number(pref.a)>0&&isFinite(Number(pref.a))&&cleanGu(pref.gu))inf={a:Number(pref.a),u:pref.u,gu:cleanGu(pref.gu)};
@@ -846,7 +847,7 @@ function upd(){if(!pend)return;var a=parseFloat($("#pg").value)||0,u=$("#pu").va
   else if(u==="serving")note.textContent="= "+r0(grams)+"g"+(pend.sv?" (1 serving = "+fmtAmt(pend.sv)+"g)":"");
   else note.textContent="= "+r0(grams)+"g ("+fmtAmt(gu)+"g per "+unitShort(u,1)+")"}
 $("#pg").oninput=upd;$("#pconv").oninput=upd;
-$("#pu").addEventListener("change",function(){var old=pGrams();syncPUnit(true);var gu=pGu();if($("#pu").value==="tbsp")$("#pg").value="1";else if(old>0&&gu>0)$("#pg").value=fmtAmt(old/gu);upd()});
+$("#pu").addEventListener("change",function(){var old=pGrams(pPreviousUnit);syncPUnit(true);var gu=pGu();if(old>0&&gu>0){var amount=old/gu;$("#pg").value=fmtAmt(amount);if(!Number($("#pg").value))$("#pg").value=String(Number(amount.toPrecision(4)))}upd()});
 function pNudge(dir){var step=unitDef($("#pu").value||"g").step||1;$("#pg").value=fmtAmt(Math.max(0,(parseFloat($("#pg").value)||0)+dir*step));upd()}
 $("#dec").onclick=function(){pNudge(-1)};
 $("#inc").onclick=function(){pNudge(1)};
@@ -1266,5 +1267,5 @@ syncFoodDb();save();setMeal(meal);view("diary");
 if(/^#recipe=/.test(location.hash)){var code=location.hash;history.replaceState(null,"",location.pathname+location.search);view("recipes");showImport(code)}
 })();
 </script>
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a53c673a9fe22fec',t:'MTc5MzU1MTg3Ng=='};var l=window.parent.location,o;try{o=new URL(l.origin).origin}catch(e){try{o=new URL(new URL(l.href).origin).origin}catch(e){o=''}}var u='/cdn-cgi/challenge-platform/scripts/jsd/main.js?ray=a53c673a9fe22fec',a=document.createElement('script');a.src=o?new URL(u,o).href:u;document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a53e3fc0990b2cb8',t:'MTc5MzU3MTIzMA=='};var l=window.parent.location,o;try{o=new URL(l.origin).origin}catch(e){try{o=new URL(new URL(l.href).origin).origin}catch(e){o=''}}var u='/cdn-cgi/challenge-platform/scripts/jsd/main.js?ray=a53e3fc0990b2cb8',a=document.createElement('script');a.src=o?new URL(u,o).href:u;document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
