@@ -6,7 +6,16 @@
 <meta name="color-scheme" content="dark">
 <meta name="theme-color" content="#0d0d0d">
 <title>Calories</title>
-<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="application-name" content="Calories">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Calories">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="shortcut icon" href="favicon.ico">
+<link rel="manifest" href="manifest.webmanifest">
 <style>
 :root{--bg:#0d0d0d;--s1:#161616;--s2:#212121;--line:#2e2e2e;--tx:#f2f2f2;--mu:#a3a3a3;--ac:#D9B8FF;--grn:#4ade80;--acd:#211630;--bad:#ff8a7a;--blue:#8ab4ff;--r:16px;--r2:10px;--tab:64px;
 --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Arial,sans-serif;--ease:cubic-bezier(.2,.8,.2,1)}
@@ -249,6 +258,10 @@ dialog.mini{max-height:92svh;overflow:auto}
 .mhead{position:sticky;top:0;z-index:3;display:grid;grid-template-columns:84px minmax(0,1fr) 84px;align-items:center;min-height:58px;margin:0 -16px 18px;padding:calc(env(safe-area-inset-top,0px) + 8px) 16px 10px;background:rgba(13,13,13,.94);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border-bottom:1px solid rgba(255,255,255,.06)}
 .mhead h3{text-align:center;font-size:1rem;white-space:nowrap}
 .mhead .btn{justify-self:start;padding-left:2px}
+/* Measurement-unit controls shared by product review, Create Food and Edit. */
+.unitfield{margin-top:10px}
+.convnote{text-align:center;margin-top:7px;min-height:1.35em}
+.sheet .unitfield label,#ed .unitfield label{margin-top:0}
 </style>
 </head>
 <body>
@@ -415,7 +428,10 @@ SOFTWARE.
       <div><label for="m-p">Protein (g)</label><input id="m-p" type="number" inputmode="decimal" enterkeyhint="next"></div>
       <div><label for="m-c">Carbs (g)</label><input id="m-c" type="number" inputmode="decimal" enterkeyhint="next"></div>
       <div><label for="m-f">Fat (g)</label><input id="m-f" type="number" inputmode="decimal" enterkeyhint="next"></div>
-      <div><label for="m-s">Serving amount</label><input id="m-s" type="number" inputmode="decimal" min="0.25" step="0.25" value="1" enterkeyhint="done" aria-describedby="m-sum"></div>
+      <div><label for="m-s">Serving amount</label><input id="m-s" type="number" inputmode="decimal" min="0.25" step="0.25" value="1" enterkeyhint="next" aria-describedby="m-sum"></div>
+      <div><label for="m-qa">Serving size amount</label><input id="m-qa" type="number" inputmode="decimal" min="0" step="0.25" value="1" enterkeyhint="next"></div>
+      <div><label for="m-qu">Serving unit</label><select id="m-qu"></select></div>
+      <div id="m-gu-wrap" hidden><label for="m-gu" id="m-gu-lbl">Grams per unit</label><input id="m-gu" type="number" inputmode="decimal" enterkeyhint="done"></div>
       <div><label id="m-icon-lbl">Icon</label><button class="iconfield" id="m-iconbtn" type="button" aria-haspopup="dialog" aria-labelledby="m-icon-lbl m-icon-name"><span class="iconpreview" id="m-icon-preview"></span><span class="iconname" id="m-icon-name">Auto</span><span class="chev" aria-hidden="true">&rsaquo;</span></button></div>
     </div>
     <p id="m-sum" role="status">Enter the totals for the full food or batch. We&rsquo;ll add and save 1 serving.</p>
@@ -428,7 +444,10 @@ SOFTWARE.
 
   <div class="sheet" id="sheet" role="group" aria-label="Review food">
     <div class="sh"><div id="pimg"></div><div><h3 id="pn"></h3><p class="sub" id="pi"></p></div><button class="xs" id="pc" type="button" aria-label="Cancel">&times;</button></div>
-    <div class="step"><button type="button" id="dec" aria-label="Less">-</button><input id="pg" type="number" inputmode="decimal" enterkeyhint="done" aria-label="Amount in grams or ml"><button type="button" id="inc" aria-label="More">+</button></div>
+    <div class="step"><button type="button" id="dec" aria-label="Less">-</button><input id="pg" type="number" inputmode="decimal" enterkeyhint="done" aria-label="Amount"><button type="button" id="inc" aria-label="More">+</button></div>
+    <div class="unitfield"><label for="pu">Unit</label><select id="pu"></select></div>
+    <div class="unitfield" id="pconvwrap" hidden><label for="pconv" id="pconv-lbl">Grams per unit</label><input id="pconv" type="number" inputmode="decimal" enterkeyhint="done"></div>
+    <p class="sub convnote" id="pgrams" role="status"></p>
     <div class="chips" id="pch"></div>
     <div class="tot"><b id="ptk"></b><span id="ptm"></span></div>
     <div class="seg mealseg" aria-label="Meal" style="margin-bottom:0"></div>
@@ -451,7 +470,7 @@ SOFTWARE.
   <div class="wrap">
     <div class="fld" style="margin-top:8px"><label for="rname">Recipe name</label><input id="rname" type="text" autocomplete="off"></div>
     <label>Servings</label><div class="step" style="margin-top:0"><button type="button" id="rsm" aria-label="Fewer servings">-</button><input id="rserv" type="number" inputmode="numeric" min="1" aria-label="Servings"><button type="button" id="rsp" aria-label="More servings">+</button></div>
-    <label>Recipe icon</label><div class="icogrid" id="r-icons" role="group" aria-label="Choose a recipe icon"></div>
+    <div class="fld"><label id="r-icon-lbl">Recipe icon</label><button class="iconfield" id="r-iconbtn" type="button" aria-haspopup="dialog" aria-labelledby="r-icon-lbl r-icon-name"><span class="iconpreview" id="r-icon-preview"></span><span class="iconname" id="r-icon-name">Auto</span><span class="chev" aria-hidden="true">&rsaquo;</span></button></div>
     <h2>Ingredients</h2><div id="ring"></div>
     <button class="btn full" id="radd" type="button" style="margin-top:6px">Add ingredient</button>
     <h2>Nutrition</h2><div class="card" id="rsum"></div>
@@ -473,7 +492,9 @@ SOFTWARE.
   <label style="margin-top:14px">Icon</label><div class="icogrid" id="ed-icons" role="group" aria-label="Choose an icon"></div>
   <label style="margin-top:14px">Amount</label>
   <div class="step" style="margin-top:0"><button type="button" id="edm" aria-label="Less">-</button><input id="ed-a" type="number" inputmode="decimal" enterkeyhint="done" aria-label="Amount"><button type="button" id="edp" aria-label="More">+</button></div>
-  <p class="sub" id="ed-u" style="text-align:center"></p>
+  <div class="unitfield"><label for="ed-unit">Unit</label><select id="ed-unit"></select></div>
+  <div class="unitfield" id="ed-gu-wrap" hidden><label for="ed-gu" id="ed-gu-lbl">Grams per unit</label><input id="ed-gu" type="number" inputmode="decimal" enterkeyhint="done"></div>
+  <p class="sub convnote" id="ed-u"></p>
   <div class="chips" id="ed-ch"></div>
   <div class="tot"><b id="edk"></b><span id="edmac"></span></div>
   <div id="ed-mealwrap"><p class="sub" style="margin-bottom:8px">Meal</p><div class="seg" id="ed-meal" aria-label="Meal"></div></div>
@@ -540,6 +561,79 @@ function entries(){return S.log[dk(cur)]||(S.log[dk(cur)]=[])}
 function tot(a){return a.reduce(function(t,e){t.k+=e.k;t.p+=e.p;t.c+=e.c;t.f+=e.f;return t},{k:0,p:0,c:0,f:0})}
 function tween(a,b,fn){if(RM||a===b){fn(b);return}var s=performance.now();(function f(n){var k=Math.min(1,(n-s)/700),e=1-Math.pow(1-k,3);fn(a+(b-a)*e);if(k<1)requestAnimationFrame(f)})(s)}
 function toast(t,undo){var x=$("#toast"),b=x.querySelector("button");x.querySelector("span").textContent=t;b.hidden=!undo;b.onclick=function(){x.hidden=true;undo&&undo()};x.hidden=false;clearTimeout(toast.t);toast.t=setTimeout(function(){x.hidden=true},undo?5000:2000)}
+/* Measurement units. Weight conversions are exact. Volume defaults use
+   1 ml ~= 1g; the UI exposes grams-per-unit for volume/count units so foods
+   like flour (about 120g/cup) or a 31g protein scoop can be corrected.
+   An entry may carry gu = grams per one unit named in its q string. */
+var UNITS=[
+ {id:"g",label:"Grams (g)",short:"g",g:1,type:"weight",step:10},
+ {id:"kg",label:"Kilograms (kg)",short:"kg",g:1000,type:"weight",step:.1},
+ {id:"oz",label:"Ounces (oz)",short:"oz",g:28.349523125,type:"weight",step:.5},
+ {id:"lb",label:"Pounds (lb)",short:"lb",g:453.59237,type:"weight",step:.1},
+ {id:"ml",label:"Milliliters (ml)",short:"ml",g:1,type:"volume",step:10},
+ {id:"tsp",label:"Teaspoons (tsp)",short:"tsp",g:4.92892159,type:"volume",step:.5},
+ {id:"tbsp",label:"Tablespoons (tbsp)",short:"tbsp",g:14.7867648,type:"volume",step:.5},
+ {id:"floz",label:"Fluid ounces (fl oz)",short:"fl oz",g:29.5735296,type:"volume",step:.5},
+ {id:"cup",label:"Cups",short:"cup",g:236.588237,type:"volume",step:.25},
+ {id:"pint",label:"Pints",short:"pint",g:473.176473,type:"volume",step:.25},
+ {id:"quart",label:"Quarts",short:"quart",g:946.352946,type:"volume",step:.25},
+ {id:"liter",label:"Liters (L)",short:"L",g:1000,type:"volume",step:.1},
+ {id:"serving",label:"Servings",short:"serving",g:0,type:"serving",step:.5},
+ {id:"scoop",label:"Scoops",short:"scoop",g:30,type:"count",step:.5},
+ {id:"each",label:"Each",short:"each",g:50,type:"count",step:.5}];
+var UNIT=Object.create(null);UNITS.forEach(function(u){UNIT[u.id]=u});
+function unitDef(id){return UNIT[id]||UNIT.serving}
+function cleanGu(v){v=Number(v);return isFinite(v)&&v>0&&v<=100000?v:0}
+function defaultGu(id){return unitDef(id).g||0}
+function entryGu(e,id){return cleanGu(e&&e.gu)||defaultGu(id)}
+function unitShort(id,a){var s=unitDef(id).short;if(a!==1&&(s==="cup"||s==="pint"||s==="quart"||s==="serving"||s==="scoop"))s+="s";return s}
+function formatQ(a,id){return id==="g"?fmtAmt(a)+"g":fmtAmt(a)+" "+unitShort(id,a)}
+function fillUnitSelect(sel,selected){if(!sel)return;sel.textContent="";UNITS.forEach(function(u){var o=el("option",null,u.label);o.value=u.id;sel.appendChild(o)});sel.value=UNIT[selected]?selected:"serving"}
+function parseQty(q){var m=String(q||"").trim().match(/^([\d]*\.?[\d]+)\s*(fl\s*oz|fluid\s*ounces?|tablespoons?|tbsp|teaspoons?|tsp|kilograms?|kg|grams?|g|milliliters?|millilitres?|ml|liters?|litres?|l|ounces?|oz|pounds?|lbs?|lb|cups?|pints?|quarts?|scoops?|servings?|each)\b/i);
+  if(!m)return{a:1,u:"serving"};var a=parseFloat(m[1]),raw=m[2].toLowerCase().replace(/\s+/g,""),u="serving";
+  if(raw==="g"||raw==="gram"||raw==="grams")u="g";else if(raw==="kg"||raw==="kilogram"||raw==="kilograms")u="kg";
+  else if(raw==="ml"||raw.indexOf("milliliter")===0||raw.indexOf("millilitre")===0)u="ml";else if(raw==="l"||raw.indexOf("liter")===0||raw.indexOf("litre")===0)u="liter";
+  else if(raw==="floz"||raw.indexOf("fluidounce")===0)u="floz";else if(raw.indexOf("tablespoon")===0||raw==="tbsp")u="tbsp";else if(raw.indexOf("teaspoon")===0||raw==="tsp")u="tsp";
+  else if(raw==="oz"||raw.indexOf("ounce")===0)u="oz";else if(raw==="lb"||raw==="lbs"||raw.indexOf("pound")===0)u="lb";
+  else if(raw.indexOf("cup")===0)u="cup";else if(raw.indexOf("pint")===0)u="pint";else if(raw.indexOf("quart")===0)u="quart";
+  else if(raw.indexOf("scoop")===0)u="scoop";else if(raw==="each")u="each";else if(raw.indexOf("serving")===0)u="serving";
+  return{a:a>0?a:1,u:u}}
+function parseAmountToken(t){t=String(t||"").trim().replace("½","1/2").replace("¼","1/4").replace("¾","3/4");
+  var parts=t.split(/\s+/),total=0;parts.forEach(function(x){if(x.indexOf("/")>0){var z=x.split("/");total+=(parseFloat(z[0])||0)/(parseFloat(z[1])||1)}else total+=parseFloat(x)||0});return total}
+function servingUnitFromPhrase(phrase){var s=String(phrase||"").toLowerCase().trim().replace(/[^a-z ]/g,"").replace(/\s+/g," ");
+  if(!s)return "serving";var pq=parseQty("1 "+s);
+  if(pq.u!=="serving"||/^servings?\b/.test(s))return pq.u;
+  if(/\bscoops?\b/.test(s))return "scoop";
+  if(/\b(eggs?|pieces?|slices?|bars?|cookies?|crackers?|patties|links?|nuggets?|items?)\b/.test(s))return "each";
+  if(/\b(portion|serving|container|package|pack|bottle|can|box|pouch)\b/.test(s))return "serving";
+  return "each"}
+function parseServingText(text,servingQty){if(!text)return null;
+  var s=String(text).replace(/\u00a0/g," ").replace(/(\d),(\d)/g,"$1.$2").trim();
+  var total=0,tv=0,tu="",tm=s.match(/\(([\d]*\.?[\d]+)\s*(kg|ml|g|l)\b/i)||s.match(/\(([\d]*\.?[\d]+)\s*(fl\s*oz|oz)\b/i);
+  if(tm){tv=parseFloat(tm[1]);tu=tm[2].toLowerCase().replace(/\s+/g,"");total=tu==="kg"||tu==="l"?tv*1000:tu==="floz"?tv*29.5735296:tu==="oz"?tv*28.349523125:tv}
+  var m=s.match(/^(\d+\s+\d+\/\d+|\d+\/\d+|[\d]*\.?[\d]+|½|¼|¾)\s*([a-z][a-z ]*?)(?=\s*\(|\s*$|,|\/)/i);
+  if(!m)return null;var a=parseAmountToken(m[1]);if(!(a>0))return null;var u=servingUnitFromPhrase(m[2]);
+  if(u==="serving"&&tm&&(tu==="ml"||tu==="l"))return{a:total,u:"ml",gu:1,src:"package"};
+  if(u==="serving"&&tm&&tu==="floz")return{a:tv,u:"floz",gu:29.5735296,src:"package"};
+  var gu=total>0?total/a:(servingQty>0?servingQty/a:defaultGu(u));
+  /* For a plain weight/volume serving ("30 g", "240 ml"), servingQty/a is
+     already 1. For a count/volume label it gives grams per item/unit. */
+  return{a:a,u:u,gu:cleanGu(gu)||defaultGu(u),src:"package"}}
+function inferNameUnit(name,cats,sv){var s=(String(name||"")+" "+String(cats||"")).toLowerCase().replace(/[-_]/g," ");
+  function between(v,min,max,fallback){return v>=min&&v<=max?v:fallback}
+  if(/egg\s*whites?/.test(s)&&!/liquid/.test(s))return{a:1,u:"each",gu:between(sv,20,60,33),src:"guess"};
+  if(/\beggs?\b/.test(s)&&!/eggplant|eggnog|salad|sandwich|noodle|rice|casserole/.test(s))return{a:1,u:"each",gu:between(sv,25,90,50),src:"guess"};
+  if(/(protein|whey|casein|collagen).*(powder|isolate|concentrate|peptides)|protein powder/.test(s)&&!/drink|shake|ready to drink|bar/.test(s))return{a:1,u:"scoop",gu:between(sv,10,80,30),src:"guess"};
+  if(/\bmilk\b/.test(s)&&!/milk chocolate|milkshake/.test(s))return sv>0?(sv>=900?{a:sv/1000,u:"liter",gu:1000,src:"guess"}:{a:sv,u:"ml",gu:1,src:"guess"}):{a:1,u:"cup",gu:240,src:"guess"};
+  if(/\b(juice|soda|cola|soft drink|beverage|drink|kombucha|iced tea)\b/.test(s))return sv>0?{a:sv,u:"ml",gu:1,src:"guess"}:(/soda|cola/.test(s)?{a:12,u:"floz",gu:29.5735296,src:"guess"}:{a:1,u:"cup",gu:240,src:"guess"});
+  if(/\bwater\b/.test(s))return sv>0?{a:sv,u:"ml",gu:1,src:"guess"}:{a:1,u:"cup",gu:240,src:"guess"};
+  if(/(olive|avocado|vegetable|canola|coconut|sunflower|grapeseed)\s+oil\b/.test(s))return{a:1,u:"tbsp",gu:between(sv,8,25,14),src:"guess"};
+  if(/(peanut|almond|cashew|sunflower seed)\s+butter\b/.test(s))return{a:2,u:"tbsp",gu:sv>=20&&sv<=45?sv/2:16,src:"guess"};
+  if(/cheese\s+slices?|sliced\s+cheese/.test(s))return{a:1,u:"each",gu:between(sv,10,45,21),src:"guess"};
+  if(/bread\s+slices?|sliced\s+bread/.test(s))return{a:1,u:"each",gu:between(sv,15,60,28),src:"guess"};
+  return null}
+function inferProductServing(f){if(!f)return{a:100,u:"g",gu:1,src:"default"};
+  return parseServingText(f.ss,f.sv)||inferNameUnit(f.n,f.cats,f.sv)||{a:f.g||100,u:"g",gu:1,src:"default"}}
 /* Food icons: a picked icon wins, then a real photo, then an auto guess from
    the name. Picks are remembered per food name in S.icons. */
 var FOOD_ICONS=[["egg","Egg"],["apple","Apple"],["banana","Banana"],["strawberry","Berries"],["orange","Orange"],["carrot","Carrot"],["broccoli","Broccoli"],["salad","Salad"],["potato","Potato"],["mushroom","Mushroom"],["beef","Beef"],["chicken","Chicken"],["bacon","Bacon"],["fish","Fish"],["salmon","Salmon"],["cheese","Cheese"],["milk","Milk"],["yogurt","Yogurt"],["bread","Bread"],["rice_bowl","Rice"],["pasta","Pasta"],["pizza","Pizza"],["burger","Burger"],["sandwich","Sandwich"],["taco","Taco"],["sushi","Sushi"],["soup","Soup"],["fries","Fries"],["coffee","Coffee"],["soda","Soda"],["water","Water"],["smoothie","Smoothie"],["cake","Cake"],["cookie","Cookie"],["ice_cream","Ice cream"],["oats","Oats"]];
@@ -567,7 +661,7 @@ function delEntry(id){var d=dk(cur);S.log[d]=(S.log[d]||[]).filter(function(y){r
 function foodKey(e){return String(e.n||"").trim().toLowerCase()+"|"+String(e.q||"")}
 function rememberFood(e){if(!e||!e.n)return;S.foods=S.foods||[];var k=foodKey(e);
   S.foods=S.foods.filter(function(y){return foodKey(y)!==k&&y.id!==e.id});
-  S.foods.unshift({id:e.id,n:e.n,k:e.k,p:e.p,c:e.c,f:e.f,q:e.q,i:e.i||"",ic:FICON[e.ic]?e.ic:(iconPref(e.n)||"")});if(S.foods.length>1000)S.foods.length=1000}
+  S.foods.unshift({id:e.id,n:e.n,k:e.k,p:e.p,c:e.c,f:e.f,q:e.q,gu:cleanGu(e.gu),i:e.i||"",ic:FICON[e.ic]?e.ic:(iconPref(e.n)||"")});if(S.foods.length>1000)S.foods.length=1000}
 function myFoods(){var map={},out=[],seen={};
   function take(e){if(!e||!e.n)return;var k=foodKey(e),r=map[k];if(!r){r=map[k]={e:e,count:0,last:0};out.push(r)}
     var id=Number(e.id)||0,sk=id?k+"#"+id:"";if(!(sk&&seen[sk])){r.count++;if(sk)seen[sk]=1}if(id>=r.last){r.last=id;r.e=e}}
@@ -578,11 +672,11 @@ function myFoods(){var map={},out=[],seen={};
 /* Materialize the full local food database into S.foods (catalogue + every
    food found in logs and recipe ingredients), so any backup written from
    this state carries the complete database, created foods included. */
-function syncFoodDb(){S.foods=myFoods().map(function(r){var e=r.e;return{id:e.id,n:e.n,k:e.k,p:e.p,c:e.c,f:e.f,q:e.q,i:e.i||"",ic:FICON[e.ic]?e.ic:(iconPref(e.n)||"")}}).slice(0,1000)}
+function syncFoodDb(){S.foods=myFoods().map(function(r){var e=r.e;return{id:e.id,n:e.n,k:e.k,p:e.p,c:e.c,f:e.f,q:e.q,gu:cleanGu(e.gu),i:e.i||"",ic:FICON[e.ic]?e.ic:(iconPref(e.n)||"")}}).slice(0,1000)}
 function foodRow(rec){var e=rec.e,r=el("div","q"),d=el("div");d.appendChild(el("b",null,e.n));
   d.appendChild(el("span",null,e.q+", "+r0(e.k)+" cal"+(rec.count>1?" \u00b7 used "+rec.count+" times":"")));
   r.appendChild(thumb(e.i,e.n,40,e.ic));r.appendChild(d);var l=el("button","btn pri lg","Add");l.type="button";
-  l.onclick=function(){commit({n:e.n,k:e.k,p:e.p,c:e.c,f:e.f,q:e.q,i:e.i||"",ic:FICON[e.ic]?e.ic:""})};r.appendChild(l);return r}
+  l.onclick=function(){commit({n:e.n,k:e.k,p:e.p,c:e.c,f:e.f,q:e.q,gu:cleanGu(e.gu),i:e.i||"",ic:FICON[e.ic]?e.ic:""})};r.appendChild(l);return r}
 
 /* Today */
 var rmode=false,draft=null;
@@ -615,7 +709,7 @@ function render(){
     if(items.length>1){var sv=el("button","btn ghost","Save as recipe");sv.type="button";sv.onclick=function(){$("#rdlg").dataset.meal=name;$("#rn").value="";$("#rdlg").showModal()};ft.appendChild(sv)}
     if(!items.length){var pd=new Date(cur);pd.setDate(pd.getDate()-1);var yItems=(S.log[dk(pd)]||[]).filter(function(e){return e.m===name});
       if(yItems.length){var isToday=dk(cur)===dk(new Date()),yv=el("button","btn ghost",(isToday?"Add yesterday's ":"Copy previous day's ")+name.toLowerCase());yv.type="button";
-        yv.onclick=function(){var added=yItems.map(function(e){var c={id:Date.now()+Math.random(),n:e.n,k:e.k,p:e.p,c:e.c,f:e.f,q:e.q,i:e.i||"",ic:FICON[e.ic]?e.ic:"",m:name};entries().push(c);rememberFood(c);return c});
+        yv.onclick=function(){var added=yItems.map(function(e){var c={id:Date.now()+Math.random(),n:e.n,k:e.k,p:e.p,c:e.c,f:e.f,q:e.q,gu:cleanGu(e.gu),i:e.i||"",ic:FICON[e.ic]?e.ic:"",m:name};entries().push(c);rememberFood(c);return c});
           save();render();toast("Added "+(isToday?"yesterday's":"previous day's")+" "+name.toLowerCase(),function(){var ids={};added.forEach(function(c){ids[c.id]=1});S.log[d]=(S.log[d]||[]).filter(function(y){return !ids[y.id]});save();render()})};ft.appendChild(yv)}}
     var ad=el("button","btn pri sm","Add food");ad.type="button";ad.onclick=function(){openAdd(name)};ft.appendChild(ad);
     c.appendChild(ft);box.appendChild(c)});
@@ -665,15 +759,26 @@ function manualIconPreview(){var auto=autoIcon($("#m-n").value),id=FICON[mIcon]?
   $("#m-icon-preview").innerHTML=iconSvg(id);
   $("#m-icon-name").textContent=FICON[mIcon]?FICON[mIcon]:"Auto"+(FICON[auto]?" \u00b7 "+FICON[auto]:"")}
 function mNum(id){var v=parseFloat($("#"+id).value);return isFinite(v)?v:NaN}
-function mCalc(){var out=$("#m-sum");if(!out)return;var s=mNum("m-s"),k=mNum("m-k"),p=mNum("m-p"),c=mNum("m-c"),f=mNum("m-f");
+fillUnitSelect($("#m-qu"),"serving");fillUnitSelect($("#pu"),"g");fillUnitSelect($("#ed-unit"),"g");
+var mUnitTouched=false;
+function inferManualUnit(){if(mUnitTouched)return;var inf=inferNameUnit($("#m-n").value,"",0)||{a:1,u:"serving",gu:0};
+  $("#m-qa").value=fmtAmt(inf.a);$("#m-qu").value=inf.u;$("#m-gu").value=inf.gu>0?fmtAmt(inf.gu):"";syncManualUnit(false)}
+function manualGu(){var u=$("#m-qu").value||"serving",d=unitDef(u);return(d.type==="volume"||d.type==="count")?(parseFloat($("#m-gu").value)||0):(d.g||0)}
+function syncManualUnit(setDefault){var u=$("#m-qu").value||"serving",d=unitDef(u),needs=d.type==="volume"||d.type==="count";
+  $("#m-gu-wrap").hidden=!needs;if(needs){$("#m-gu-lbl").textContent="Grams per "+unitShort(u,1);if(setDefault||!$("#m-gu").value)$("#m-gu").value=fmtAmt(defaultGu(u))}mCalc()}
+function mCalc(){var out=$("#m-sum");if(!out)return;var s=mNum("m-s"),k=mNum("m-k"),p=mNum("m-p"),c=mNum("m-c"),f=mNum("m-f"),qa=mNum("m-qa"),u=$("#m-qu").value||"serving",d=unitDef(u),gu=manualGu();
   if(!(s>0)){out.textContent="Serving amount must be above zero.";return}
-  if(isNaN(k)){out.textContent="Enter the totals for the full food or batch. We\u2019ll add and save 1 serving.";return}
-  out.textContent="Adds 1 serving: "+r0(k/s)+" cal \u00b7 "+r1((isNaN(p)?0:p)/s)+"g protein \u00b7 "+r1((isNaN(c)?0:c)/s)+"g carbs \u00b7 "+r1((isNaN(f)?0:f)/s)+"g fat"+(s!==1?" ("+fmt(k)+" cal \u00f7 "+fmtAmt(s)+" servings)":"")}
-["m-n","m-k","m-p","m-c","m-f","m-s"].forEach(function(id){$("#"+id).addEventListener("input",function(){if(id==="m-n")manualIconPreview();mCalc()})});
+  if(!(qa>0)){out.textContent="Serving size amount must be above zero.";return}
+  if((d.type==="volume"||d.type==="count")&&!(gu>0)){out.textContent="Enter grams per "+unitShort(u,1)+".";return}
+  if(isNaN(k)){out.textContent="Enter the totals for the full food or batch. We'll add and save "+formatQ(qa,u)+".";return}
+  var grams=gu>0?qa*gu:0;
+  out.textContent="Adds "+formatQ(qa,u)+": "+r0(k/s)+" cal \u00b7 "+r1((isNaN(p)?0:p)/s)+"g protein \u00b7 "+r1((isNaN(c)?0:c)/s)+"g carbs \u00b7 "+r1((isNaN(f)?0:f)/s)+"g fat"+(grams?" (\u2248"+r0(grams)+"g)":"")+(s!==1?" \u00b7 "+fmt(k)+" cal \u00f7 "+fmtAmt(s)+" servings":"")}
+["m-n","m-k","m-p","m-c","m-f","m-s","m-qa","m-gu"].forEach(function(id){$("#"+id).addEventListener("input",function(){if(id==="m-qa"||id==="m-gu")mUnitTouched=true;if(id==="m-n"){manualIconPreview();inferManualUnit()}else mCalc()})});
+$("#m-qu").addEventListener("change",function(){mUnitTouched=true;syncManualUnit(true)});
 $("#m-iconbtn").onclick=function(){openIconWindow(mIcon,function(id){mIcon=id;manualIconPreview()})};
 function openManual(){closeSheet(true);manualReturn=curTab;manualMode=true;scanMode=false;$("#add").classList.add("manual");stopCam();$("#t-scan").hidden=true;
   ["search","recent","recipes"].forEach(function(n){$("#t-"+n).hidden=true});$("#scanfab").hidden=true;$("#t-manual").hidden=false;$("#t-manual").scrollTop=0;
-  var q=$("#q").value.trim();if(q&&!$("#m-n").value)$("#m-n").value=q;if(!$("#m-s").value)$("#m-s").value=1;mIcon=iconPref($("#m-n").value);manualIconPreview();mCalc()}
+  var q=$("#q").value.trim();if(q&&!$("#m-n").value)$("#m-n").value=q;if(!$("#m-s").value)$("#m-s").value=1;if(!$("#m-qa").value)$("#m-qa").value=1;mIcon=iconPref($("#m-n").value);manualIconPreview();if(mUnitTouched)syncManualUnit(false);else inferManualUnit()}
 function createRecipeFromAdd(){if(rmode)return;$("#add").close();view("recipes");openEditor()}
 $("#scanfab").onclick=openScan;
 $("#scanback").onclick=function(){tab("search")};
@@ -689,7 +794,7 @@ function commit(e){var id=Date.now()+Math.random();e.id=id;if(FICON[e.ic])setIco
   if(rmode){draft.ing.push(e);edRender();toast("Added to recipe",function(){draft.ing=draft.ing.filter(function(y){return y.id!==id});edRender()})}
   else{e.m=meal;addRaw(e);toast("Added to "+meal.toLowerCase(),function(){delEntry(id);if(view0==="diary")render()})}
   return id}
-function addEntry(n,k,p,c,f,q,img,ic){return commit({n:n,k:k,p:p,c:c,f:f,q:q,i:img||"",ic:FICON[ic]?ic:""})}
+function addEntry(n,k,p,c,f,q,img,ic,gu){return commit({n:n,k:k,p:p,c:c,f:f,q:q,gu:cleanGu(gu),i:img||"",ic:FICON[ic]?ic:""})}
 
 /* Scanner */
 function stopCam(){if(reader){try{reader.reset()}catch(e){}reader=null}var v=$("#vid");if(v.srcObject){v.srcObject.getTracks().forEach(function(t){t.stop()});v.srcObject=null}}
@@ -705,10 +810,11 @@ $("#bcgo").onclick=function(){lookup($("#bc").value.trim())};
 $("#bc").onkeydown=function(e){if(e.key==="Enter")$("#bcgo").click()};
 
 /* Open Food Facts */
-var OFF="https://world.openfoodfacts.org",FIELDS="product_name,brands,nutriments,serving_quantity,image_front_small_url";
+var OFF="https://world.openfoodfacts.org",FIELDS="product_name,brands,nutriments,serving_quantity,serving_size,product_quantity,quantity,categories_tags,image_front_small_url";
 function norm(p){var n=p.nutriments||{},k=n["energy-kcal_100g"];if(k==null&&n["energy_100g"]!=null)k=n["energy_100g"]/4.184;
   if(k==null||!p.product_name)return null;
-  var sv=parseFloat(p.serving_quantity)||0;return{n:p.product_name,b:p.brands||"",k:k,p:n.proteins_100g||0,c:n.carbohydrates_100g||0,f:n.fat_100g||0,g:sv||100,sv:sv,i:p.image_front_small_url||""}}
+  var sv=parseFloat(p.serving_quantity)||0;
+  return{n:p.product_name,b:p.brands||"",k:k,p:n.proteins_100g||0,c:n.carbohydrates_100g||0,f:n.fat_100g||0,g:sv||100,sv:sv,ss:String(p.serving_size||"").slice(0,120),cats:Array.isArray(p.categories_tags)?p.categories_tags.join(" "):"",i:p.image_front_small_url||""}}
 function lookup(code){
   if(!/^\d{6,14}$/.test(code)){smsg("Enter 6 to 14 digits.",1);return}
   smsg("Looking up "+code+"...");
@@ -716,19 +822,36 @@ function lookup(code){
     var f=j.status===1&&norm(j.product);
     if(!f){smsg("No nutrition data for that barcode. Try Search or Manual.",1);setTimeout(function(){if(scanMode&&!pend)startCam()},1600);return}
     smsg("Found it.");show(f)}).catch(function(){smsg("Could not reach Open Food Facts. Check your connection.",1);if(scanMode)startCam()})}
+function pDefaultGu(u){if(!pend)return defaultGu(u);if(u==="serving")return pend.sv||100;if(u==="scoop")return pend.sv||30;if(u==="each")return pend.sv||50;return defaultGu(u)}
+function pGu(){if(!pend)return 0;var u=$("#pu").value||"g",d=unitDef(u);if(u==="serving")return parseFloat($("#pconv").value)||pend.sv||100;return(d.type==="volume"||d.type==="count")?(parseFloat($("#pconv").value)||0):(d.g||0)}
+function pGrams(){return(parseFloat($("#pg").value)||0)*pGu()}
+function syncPUnit(setDefault){var u=$("#pu").value||"g",d=unitDef(u),needs=d.type==="volume"||d.type==="count";
+  if(u==="serving"&&setDefault)$("#pconv").value=fmtAmt(pDefaultGu(u));
+  $("#pconvwrap").hidden=!needs;if(needs){$("#pconv-lbl").textContent="Grams per "+unitShort(u,1);if(setDefault||!$("#pconv").value)$("#pconv").value=fmtAmt(pDefaultGu(u))}upd()}
 function show(f){pend=f;stopCam();var im=$("#pimg");im.textContent="";im.appendChild(thumb(f.i,f.n,64));
-  $("#pn").textContent=f.n;$("#pi").textContent=(f.b?f.b+". ":"")+r0(f.k)+" cal per 100g";
-  var c=$("#pch");c.textContent="";[50,100].concat(f.sv&&f.sv!==100&&f.sv!==50?[f.sv]:[]).forEach(function(g){var b=el("button",null,g===f.sv&&g!==100?"1 serving, "+g+"g":g+"g");b.type="button";b.onclick=function(){$("#pg").value=g;upd()};c.appendChild(b)});
-  $("#pg").value=f.g;upd();$("#sheet").classList.add("open")}
+  var inf=inferProductServing(f);
+  $("#pn").textContent=f.n;$("#pi").textContent=(f.b?f.b+". ":"")+(f.ss?"Serving: "+f.ss+". ":"")+r0(f.k)+" cal per 100g";
+  fillUnitSelect($("#pu"),inf.u);$("#pconv").value=inf.gu>0?fmtAmt(inf.gu):"";
+  var c=$("#pch");c.textContent="";
+  [50,100].forEach(function(g){var b=el("button",null,g+"g");b.type="button";b.onclick=function(){$("#pu").value="g";$("#pg").value=g;syncPUnit(true)};c.appendChild(b)});
+  if(f.sv&&f.sv!==100&&f.sv!==50){var sb=el("button",null,"1 serving, "+fmtAmt(f.sv)+"g");sb.type="button";sb.onclick=function(){$("#pu").value="serving";$("#pg").value=1;syncPUnit(true)};c.appendChild(sb)}
+  $("#pg").value=fmtAmt(inf.a);syncPUnit(false);$("#sheet").classList.add("open")}
 function closeSheet(quiet){$("#sheet").classList.remove("open");pend=null;if(!quiet&&scanMode)startCam();$("#scanfab").hidden=scanMode||manualMode||curTab!=="search"||!$("#add").open}
-function upd(){if(!pend)return;var q=parseFloat($("#pg").value)||0,x=q/100;
-  $("#ptk").textContent=r0(pend.k*x)+" cal";$("#ptm").textContent=r1(pend.p*x)+"g protein, "+r1(pend.c*x)+"g carbs, "+r1(pend.f*x)+"g fat"}
-$("#pg").oninput=upd;
-$("#dec").onclick=function(){$("#pg").value=Math.max(0,(parseFloat($("#pg").value)||0)-10);upd()};
-$("#inc").onclick=function(){$("#pg").value=(parseFloat($("#pg").value)||0)+10;upd()};
+function upd(){if(!pend)return;var a=parseFloat($("#pg").value)||0,u=$("#pu").value||"g",d=unitDef(u),gu=pGu(),grams=a*gu,x=grams/100;
+  $("#ptk").textContent=r0(pend.k*x)+" cal";$("#ptm").textContent=r1(pend.p*x)+"g protein, "+r1(pend.c*x)+"g carbs, "+r1(pend.f*x)+"g fat";
+  var note=$("#pgrams");
+  if((d.type==="volume"||d.type==="count")&&!(gu>0))note.textContent="Enter grams per "+unitShort(u,1)+".";
+  else if(u==="g")note.textContent="";
+  else if(u==="serving")note.textContent="= "+r0(grams)+"g"+(pend.sv?" (1 serving = "+fmtAmt(pend.sv)+"g)":"");
+  else note.textContent="= "+r0(grams)+"g ("+fmtAmt(gu)+"g per "+unitShort(u,1)+")"}
+$("#pg").oninput=upd;$("#pconv").oninput=upd;
+$("#pu").addEventListener("change",function(){var old=pGrams();syncPUnit(true);var gu=pGu();if(old>0&&gu>0)$("#pg").value=fmtAmt(old/gu);upd()});
+function pNudge(dir){var step=unitDef($("#pu").value||"g").step||1;$("#pg").value=fmtAmt(Math.max(0,(parseFloat($("#pg").value)||0)+dir*step));upd()}
+$("#dec").onclick=function(){pNudge(-1)};
+$("#inc").onclick=function(){pNudge(1)};
 $("#pc").onclick=function(){closeSheet()};
-$("#pgo").onclick=function(){if(!pend)return;var q=parseFloat($("#pg").value)||0,x=q/100;if(!q)return;
-  addEntry(pend.n,pend.k*x,pend.p*x,pend.c*x,pend.f*x,q+"g",pend.i);closeSheet()};
+$("#pgo").onclick=function(){if(!pend)return;var a=parseFloat($("#pg").value)||0,gu=pGu(),grams=a*gu,x=grams/100;if(!(a>0&&grams>0)){upd();return}
+  addEntry(pend.n,pend.k*x,pend.p*x,pend.c*x,pend.f*x,formatQ(a,$("#pu").value||"g"),pend.i,"",gu);closeSheet()};
 function qmsg(t,err){var m=$("#qmsg");m.textContent=t;m.className="msg"+(err?" err":"")}
 /* "All" tab: empty box -> recents underneath. Typing -> My Food matches show
    instantly, database results follow (debounced, stale responses ignored). */
@@ -754,13 +877,15 @@ $("#q").oninput=function(){var q=this.value.trim();clearTimeout(qTimer);var my=+
   qmsg("Searching...");qTimer=setTimeout(function(){doSearch(q,my,ln)},350)};
 $("#q").onkeydown=function(e){if(e.key!=="Enter")return;e.preventDefault();var q=this.value.trim();if(q.length<2)return;
   clearTimeout(qTimer);var my=++qSeq;$("#qrecentwrap").hidden=true;doSearch(q,my,renderLocal(q))};
-$("#mgo").onclick=function(){var n=$("#m-n").value.trim(),k=parseFloat($("#m-k").value),s=parseFloat($("#m-s").value);
+$("#mgo").onclick=function(){var n=$("#m-n").value.trim(),k=parseFloat($("#m-k").value),s=parseFloat($("#m-s").value),qa=parseFloat($("#m-qa").value),u=$("#m-qu").value||"serving",d=unitDef(u),gu=manualGu();
   if(!n||isNaN(k)){$("#mmsg").textContent="Enter a name and calories.";return}
-  if(!(s>0)){$("#mmsg").textContent="Serving amount must be above zero.";return}$("#mmsg").textContent="";
+  if(!(s>0)){$("#mmsg").textContent="Serving amount must be above zero.";return}
+  if(!(qa>0)){$("#mmsg").textContent="Serving size amount must be above zero.";return}
+  if((d.type==="volume"||d.type==="count")&&!(gu>0)){$("#mmsg").textContent="Enter grams per "+unitShort(u,1)+".";return}$("#mmsg").textContent="";
   /* Manual nutrition is the full food/batch total. Serving amount says how
-     many servings it makes; Add logs (and My Food saves) exactly one. */
-  addEntry(n,k/s,(parseFloat($("#m-p").value)||0)/s,(parseFloat($("#m-c").value)||0)/s,(parseFloat($("#m-f").value)||0)/s,"1 serving"+(s!==1?" (1 of "+fmtAmt(s)+")":""),"",mIcon);
-  ["n","k","p","c","f"].forEach(function(i){$("#m-"+i).value=""});$("#m-s").value=1;mIcon="";manualIconPreview();mCalc()};
+     many servings it makes; serving size amount+unit names one portion. */
+  addEntry(n,k/s,(parseFloat($("#m-p").value)||0)/s,(parseFloat($("#m-c").value)||0)/s,(parseFloat($("#m-f").value)||0)/s,formatQ(qa,u)+(s!==1?" (1 of "+fmtAmt(s)+")":""),"",mIcon,gu);
+  ["n","k","p","c","f"].forEach(function(i){$("#m-"+i).value=""});$("#m-s").value=1;$("#m-qa").value=1;$("#m-qu").value="serving";$("#m-gu").value="";mUnitTouched=false;mIcon="";manualIconPreview();syncManualUnit(false)};
 
 /* Recents (under the search box) and My Food (everything ever used) */
 function recents(o){o.textContent="";var out=myFoods().slice(0,20);
@@ -791,12 +916,16 @@ function recPick(){var o=$("#rcp");o.textContent="";if(!S.recipes.length)o.appen
 /* Save a meal as a recipe */
 $("#rcancel").onclick=function(){$("#rdlg").close()};
 $("#rsave").onclick=function(){var n=$("#rn").value.trim();if(!n)return;
-  var ing=entries().filter(function(e){return e.m===$("#rdlg").dataset.meal}).map(function(e){return{id:Math.random(),n:e.n,q:e.q,k:e.k,p:e.p,c:e.c,f:e.f,i:e.i||"",ic:FICON[e.ic]?e.ic:""}});
+  var ing=entries().filter(function(e){return e.m===$("#rdlg").dataset.meal}).map(function(e){return{id:Math.random(),n:e.n,q:e.q,gu:cleanGu(e.gu),k:e.k,p:e.p,c:e.c,f:e.f,i:e.i||"",ic:FICON[e.ic]?e.ic:""}});
   S.recipes.push({id:Date.now(),n:n,s:1,ing:ing,ic:iconPref(n)||(ing[0]&&ing[0].ic)||""});save();$("#rdlg").close();toast("Recipe saved")};
 
 /* Recipe editor */
-function rIcons(){renderIconPicker($("#r-icons"),rIcon,function(id){rIcon=id;if(draft)draft.ic=id;rIcons()})}
-function openEditor(r){draft=r?JSON.parse(JSON.stringify(r)):{id:Date.now(),n:"",s:1,ing:[],ic:""};draft.isNew=!r;rIcon=FICON[draft.ic]?draft.ic:iconPref(draft.n);$("#rname").value=draft.n;$("#rserv").value=draft.s;$("#rdel").hidden=!r;rIcons();$("#rec").showModal();edRender()}
+function recipeIconPreview(){var auto=autoIcon($("#rname").value),id=FICON[rIcon]?rIcon:auto;
+  $("#r-icon-preview").innerHTML=iconSvg(id);
+  $("#r-icon-name").textContent=FICON[rIcon]?FICON[rIcon]:"Auto"+(FICON[auto]?" \u00b7 "+FICON[auto]:"")}
+$("#r-iconbtn").onclick=function(){openIconWindow(rIcon,function(id){rIcon=id;if(draft)draft.ic=id;recipeIconPreview()})};
+$("#rname").addEventListener("input",recipeIconPreview);
+function openEditor(r){draft=r?JSON.parse(JSON.stringify(r)):{id:Date.now(),n:"",s:1,ing:[],ic:""};draft.isNew=!r;rIcon=FICON[draft.ic]?draft.ic:iconPref(draft.n);$("#rname").value=draft.n;$("#rserv").value=draft.s;$("#rdel").hidden=!r;recipeIconPreview();$("#rec").showModal();edRender()}
 function edRender(){var L=$("#ring");L.textContent="";
   if(!draft.ing.length)L.appendChild(el("p","empty","No ingredients yet. Add foods by scanning, searching or typing them in."));
   draft.ing.forEach(function(e){var r=el("div","q editable"),d=el("div");d.appendChild(el("b",null,e.n));d.appendChild(el("span",null,e.q+", "+r0(e.k)+" cal"));
@@ -834,30 +963,59 @@ $("#lgo").onclick=function(){var t=rtot(lgR),s=parseFloat($("#lgs").value)||0;if
 /* Edit a logged entry (or a recipe ingredient while in the recipe editor).
    Entries store baked totals plus a quantity string like "150g" / "2 servings",
    so editing rescales proportionally from that - old data edits correctly too. */
-var edE=null,edIng=false,edUnit="g",edPer=null,edMealPick="",edIcon="";
+var edE=null,edIng=false,edUnit="g",edOrigUnit="g",edPer=null,edPerGram=null,edMealPick="",edIcon="";
 function edIcons(){renderIconPicker($("#ed-icons"),edIcon,function(id){edIcon=id;edIcons()})}
 function fmtAmt(a){return String(Math.round(a*100)/100)}
-function parseQ(e){var m=String(e.q||"").trim().match(/^([\d]*\.?[\d]+)\s*(g|servings?)$/i);if(!m)return{a:1,u:"serving"};var a=parseFloat(m[1]);return{a:a>0?a:1,u:m[2].toLowerCase()==="g"?"g":"serving"}}
-function openEdit(e,ing){edE=e;edIng=!!ing;var pq=parseQ(e);edUnit=pq.u;edPer={k:e.k/pq.a,p:e.p/pq.a,c:e.c/pq.a,f:e.f/pq.a};edMealPick=e.m||meal;edIcon=FICON[e.ic]?e.ic:iconPref(e.n);
+function parseQ(e){return parseQty(e&&e.q)}
+function edNeedsGu(u){var t=unitDef(u||edUnit).type;return t==="volume"||t==="count"||t==="serving"}
+function edGu(){var d=unitDef(edUnit);return edNeedsGu(edUnit)?(parseFloat($("#ed-gu").value)||0):(d.g||0)}
+function edTotals(){var a=parseFloat($("#ed-a").value)||0;
+  if(edPerGram){var gu=edGu();if(!(gu>0))return null;var x=a*gu;return{k:edPerGram.k*x,p:edPerGram.p*x,c:edPerGram.c*x,f:edPerGram.f*x}}
+  return{k:edPer.k*a,p:edPer.p*a,c:edPer.c*a,f:edPer.f*a}}
+function edChips(){var ch=$("#ed-ch");ch.textContent="";var vals=(edUnit==="g"||edUnit==="ml")?[50,100,150,200]:edUnit==="oz"?[1,2,4,8]:edUnit==="floz"?[4,8,12,16]:(edUnit==="kg"||edUnit==="lb")?[.25,.5,1,2]:edUnit==="tsp"?[1,2,3,6]:edUnit==="tbsp"?[1,2,3,4]:[.5,1,1.5,2];
+  vals.forEach(function(v){var b=el("button",null,formatQ(v,edUnit));b.type="button";b.dataset.v=v;b.onclick=function(){$("#ed-a").value=v;edUpd()};ch.appendChild(b)})}
+function syncEdUnit(setDefault,guOverride){var needs=edNeedsGu(edUnit);$("#ed-gu-wrap").hidden=!needs;
+  if(needs){$("#ed-gu-lbl").textContent="Grams per "+unitShort(edUnit,1)+(edUnit==="serving"?" (for conversions)":"");
+    if(guOverride!=null)$("#ed-gu").value=guOverride>0?fmtAmt(guOverride):"";
+    else if(setDefault)$("#ed-gu").value=defaultGu(edUnit)>0?fmtAmt(defaultGu(edUnit)):""}
+  edChips();edUpd()}
+function openEdit(e,ing){edE=e;edIng=!!ing;var pq=parseQ(e),gu0=entryGu(e,pq.u);edUnit=pq.u;edOrigUnit=pq.u;
+  edPer={k:e.k/pq.a,p:e.p/pq.a,c:e.c/pq.a,f:e.f/pq.a};
+  edPerGram=gu0>0?{k:e.k/(pq.a*gu0),p:e.p/(pq.a*gu0),c:e.c/(pq.a*gu0),f:e.f/(pq.a*gu0)}:null;
+  edMealPick=e.m||meal;edIcon=FICON[e.ic]?e.ic:iconPref(e.n);
   $("#edt").textContent=ing?"Edit ingredient":"Edit food";
-  $("#ed-n").value=e.n;edIcons();$("#ed-a").value=fmtAmt(pq.a);$("#ed-u").textContent=edUnit==="g"?"grams":"servings";$("#edmsg").textContent="";
-  var ch=$("#ed-ch");ch.textContent="";(edUnit==="g"?[50,100,150,200]:[0.5,1,1.5,2]).forEach(function(v){var b=el("button",null,edUnit==="g"?v+"g":fmtAmt(v));b.type="button";b.dataset.v=v;b.onclick=function(){$("#ed-a").value=v;edUpd()};ch.appendChild(b)});
+  $("#ed-n").value=e.n;edIcons();fillUnitSelect($("#ed-unit"),edUnit);$("#ed-a").value=fmtAmt(pq.a);$("#ed-gu").value=gu0>0?fmtAmt(gu0):"";$("#edmsg").textContent="";
   $("#ed-mealwrap").hidden=edIng;var seg=$("#ed-meal");seg.textContent="";
   MEALS.forEach(function(m){var b=el("button",null,m);b.type="button";b.setAttribute("aria-pressed",m===edMealPick);b.onclick=function(){edMealPick=m;$$("#ed-meal button").forEach(function(y){y.setAttribute("aria-pressed",y.textContent===m)})};seg.appendChild(b)});
-  edUpd();$("#ed").showModal()}
-function edUpd(){if(!edE)return;var a=parseFloat($("#ed-a").value)||0;$("#edk").textContent=r0(edPer.k*a)+" cal";$("#edmac").textContent=r1(edPer.p*a)+"g protein, "+r1(edPer.c*a)+"g carbs, "+r1(edPer.f*a)+"g fat";
+  syncEdUnit(false);$("#ed").showModal()}
+function edUpd(){if(!edE)return;var a=parseFloat($("#ed-a").value)||0,t=edTotals(),gu=edGu();
+  $("#edk").textContent=r0(t?t.k:0)+" cal";$("#edmac").textContent=r1(t?t.p:0)+"g protein, "+r1(t?t.c:0)+"g carbs, "+r1(t?t.f:0)+"g fat";
+  var note=$("#ed-u");
+  if(edPerGram&&!(gu>0))note.textContent="Enter grams per "+unitShort(edUnit,1)+" to convert.";
+  else if(edPerGram&&edUnit!=="g")note.textContent="= "+r0(a*gu)+"g";
+  else if(!edPerGram&&edUnit==="serving")note.textContent="Enter grams per serving if you want to convert this to weight or volume.";
+  else note.textContent=unitShort(edUnit,a);
   $$("#ed-ch button").forEach(function(b){b.setAttribute("aria-pressed",parseFloat(b.dataset.v)===a)})}
-function edNudge(d){var st=edUnit==="g"?10:0.5,v=(parseFloat($("#ed-a").value)||0)+d*st;$("#ed-a").value=fmtAmt(Math.max(0,v));edUpd()}
+function edNudge(d){var st=unitDef(edUnit).step||.5,v=(parseFloat($("#ed-a").value)||0)+d*st;$("#ed-a").value=fmtAmt(Math.max(0,v));edUpd()}
+$("#ed-unit").addEventListener("change",function(){if(!edE)return;var oldA=parseFloat($("#ed-a").value)||0,oldGu=edGu(),grams=edPerGram&&oldGu>0?oldA*oldGu:0,oldUnit=edUnit;
+  edUnit=this.value;var override=null;
+  if(edUnit===edOrigUnit&&cleanGu(edE.gu))override=cleanGu(edE.gu);else if(edUnit==="serving"&&grams>0)override=grams;
+  syncEdUnit(true,override);var ngu=edGu();
+  if(grams>0&&ngu>0)$("#ed-a").value=fmtAmt(grams/ngu);
+  else if(!edPerGram&&oldUnit==="serving"&&unitDef(edUnit).type==="count"&&ngu>0)edPerGram={k:edPer.k/ngu,p:edPer.p/ngu,c:edPer.c/ngu,f:edPer.f/ngu};
+  edUpd()});
+$("#ed-gu").addEventListener("input",function(){if(edE&&!edPerGram){var gu=edGu();if(gu>0)edPerGram={k:edPer.k/gu,p:edPer.p/gu,c:edPer.c/gu,f:edPer.f/gu}}edUpd()});
 $("#ed-a").oninput=edUpd;
 $("#edm").onclick=function(){edNudge(-1)};
 $("#edp").onclick=function(){edNudge(1)};
 $("#edx").onclick=function(){$("#ed").close()};
 $("#ed").addEventListener("close",function(){edE=null});
-$("#edgo").onclick=function(){var e=edE;if(!e)return;var a=parseFloat($("#ed-a").value),n=$("#ed-n").value.trim();
+$("#edgo").onclick=function(){var e=edE;if(!e)return;var a=parseFloat($("#ed-a").value),n=$("#ed-n").value.trim(),t=edTotals(),gu=edGu();
   if(!n){$("#edmsg").textContent="Enter a name.";return}if(!a||a<=0){$("#edmsg").textContent="Enter an amount above zero, or Delete instead.";return}
-  var old={n:e.n,k:e.k,p:e.p,c:e.c,f:e.f,q:e.q,m:e.m,ic:e.ic||""},oldPref=iconPref(e.n),ing=edIng;
-  e.n=n;e.k=edPer.k*a;e.p=edPer.p*a;e.c=edPer.c*a;e.f=edPer.f*a;
-  e.q=edUnit==="g"?fmtAmt(a)+"g":fmtAmt(a)+(a===1?" serving":" servings");if(!ing)e.m=edMealPick;e.ic=FICON[edIcon]?edIcon:"";setIconPref(e.n,e.ic);rememberFood(e);
+  if(edPerGram&&!t){$("#edmsg").textContent="Enter grams per "+unitShort(edUnit,1)+".";return}
+  var old={n:e.n,k:e.k,p:e.p,c:e.c,f:e.f,q:e.q,gu:cleanGu(e.gu),m:e.m,ic:e.ic||""},oldPref=iconPref(e.n),ing=edIng;
+  e.n=n;e.k=t.k;e.p=t.p;e.c=t.c;e.f=t.f;
+  e.q=formatQ(a,edUnit);e.gu=edPerGram?gu:0;if(!ing)e.m=edMealPick;e.ic=FICON[edIcon]?edIcon:"";setIconPref(e.n,e.ic);rememberFood(e);
   $("#ed").close();
   if(ing){edRender();toast("Updated "+e.n)}
   else{save();render();toast("Updated "+e.n,function(){Object.assign(e,old);setIconPref(e.n,oldPref);save();render()})}};
@@ -866,13 +1024,13 @@ $("#ed-del").onclick=function(){var e=edE;if(!e)return;var ing=edIng,d=dk(cur);$
   else{delEntry(e.id);render();toast("Removed "+e.n,function(){(S.log[d]||(S.log[d]=[])).push(e);save();render()})}};
 
 /* Share and import */
-function enc(r){var o={v:1,n:r.n,s:r.s,ic:FICON[r.ic]?r.ic:"",g:r.ing.map(function(x){return[x.n,x.q,r1(x.k),r1(x.p),r1(x.c),r1(x.f),FICON[x.ic]?x.ic:(iconPref(x.n)||"")]})};
+function enc(r){var o={v:1,n:r.n,s:r.s,ic:FICON[r.ic]?r.ic:"",g:r.ing.map(function(x){return[x.n,x.q,r1(x.k),r1(x.p),r1(x.c),r1(x.f),FICON[x.ic]?x.ic:(iconPref(x.n)||""),cleanGu(x.gu)||""]})};
   return btoa(unescape(encodeURIComponent(JSON.stringify(o)))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"")}
 function dec(str){try{str=String(str).trim();var m=str.match(/recipe=([A-Za-z0-9_-]+)/);if(m)str=m[1];
   str=str.replace(/[^A-Za-z0-9_-]/g,"").replace(/-/g,"+").replace(/_/g,"/");while(str.length%4)str+="=";
   var o=JSON.parse(decodeURIComponent(escape(atob(str))));if(!o||!Array.isArray(o.g)||o.g.length>60)return null;
   var cl=function(x){return String(x==null?"":x).slice(0,80)},nm=function(x){x=Number(x);return isFinite(x)&&x>=0&&x<100000?x:0};
-  return{id:Date.now(),n:cl(o.n)||"Recipe",s:Math.max(1,Math.min(99,Number(o.s)||1)),ic:FICON[o.ic]?o.ic:"",ing:o.g.map(function(x){return{id:Math.random(),n:cl(x[0]),q:cl(x[1]),k:nm(x[2]),p:nm(x[3]),c:nm(x[4]),f:nm(x[5]),i:"",ic:FICON[x[6]]?x[6]:""}})}}catch(e){return null}}
+  return{id:Date.now(),n:cl(o.n)||"Recipe",s:Math.max(1,Math.min(99,Number(o.s)||1)),ic:FICON[o.ic]?o.ic:"",ing:o.g.map(function(x){return{id:Math.random(),n:cl(x[0]),q:cl(x[1]),gu:nm(x[7]),k:nm(x[2]),p:nm(x[3]),c:nm(x[4]),f:nm(x[5]),i:"",ic:FICON[x[6]]?x[6]:""}})}}catch(e){return null}}
 /* Export = a self-contained link/code. Ingredients carry their own baked
    nutrition (see enc), so manually created foods export and import intact. */
 var rexR=null,rexUrl="";
@@ -1058,7 +1216,7 @@ function cleanBackup(txt){var o;try{o=JSON.parse(txt)}catch(e){return null}
   function img(x){x=str(x,400);return /^https?:\/\//i.test(x)?x:""}
   function isd(x){return /^\d{4}-\d{2}-\d{2}$/.test(x)}
   function food(e){if(!e||typeof e!=="object")return null;
-    return{id:Number(e.id)||Math.random(),n:str(e.n,120)||"Food",k:num(e.k,10000),p:num(e.p,10000),c:num(e.c,10000),f:num(e.f,10000),q:str(e.q,40)||"1 serving",i:img(e.i),ic:FICON[e.ic]?e.ic:""}}
+    return{id:Number(e.id)||Math.random(),n:str(e.n,120)||"Food",k:num(e.k,10000),p:num(e.p,10000),c:num(e.c,10000),f:num(e.f,10000),q:str(e.q,40)||"1 serving",gu:num(e.gu,100000),i:img(e.i),ic:FICON[e.ic]?e.ic:""}}
   var g=(o.goal&&typeof o.goal==="object")?o.goal:{},entriesN=0;
   var data={goal:{k:num(g.k,20000)||1950,p:num(g.p,5000),c:num(g.c,5000),f:num(g.f,5000),u:g.u==="kg"?"kg":"lb",w:num(g.w,2000)},log:{},weights:[],recipes:[],foods:[],icons:{},profile:{sex:"female",age:0,h:0,wkg:0,act:"1.55",pace:-500,style:"balanced"}};
   if(o.log&&typeof o.log==="object")Object.keys(o.log).forEach(function(d){if(!isd(d)||!Array.isArray(o.log[d]))return;
@@ -1075,7 +1233,7 @@ function cleanBackup(txt){var o;try{o=JSON.parse(txt)}catch(e){return null}
      recipe ingredients too, so older backups without a foods array (or with
      a partial one) still restore a full My Food database. */
   (function(){var seen={};data.foods.forEach(function(f){seen[foodKey(f)]=1});
-    function addf(e){if(!e)return;var k=foodKey(e);if(seen[k])return;seen[k]=1;data.foods.push({id:e.id,n:e.n,k:e.k,p:e.p,c:e.c,f:e.f,q:e.q,i:e.i||"",ic:FICON[e.ic]?e.ic:""})}
+    function addf(e){if(!e)return;var k=foodKey(e);if(seen[k])return;seen[k]=1;data.foods.push({id:e.id,n:e.n,k:e.k,p:e.p,c:e.c,f:e.f,q:e.q,gu:cleanGu(e.gu),i:e.i||"",ic:FICON[e.ic]?e.ic:""})}
     Object.keys(data.log).forEach(function(d){data.log[d].forEach(addf)});
     data.recipes.forEach(function(r){r.ing.forEach(addf)});
     data.foods=data.foods.slice(0,1000)})();
