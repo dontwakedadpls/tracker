@@ -264,14 +264,6 @@ dialog.mini{max-height:92svh;overflow:auto}
 .pedit{display:block;margin:4px auto 0;color:var(--ac);font-size:.8125rem;font-weight:700;padding:5px 10px}
 .label-dialog{max-height:90vh;overflow-y:auto}.label-dialog input{width:100%}
 .sheet .unitfield label,#ed .unitfield label{margin-top:0}
-
-/* Scanner: frame is centered by the layout (not by % of a resizing box), and stays hidden until the camera is live */
-#add{height:100vh;height:100dvh}
-.frame{--fw:min(80vw,380px);inset:0;margin:auto;width:var(--fw);height:calc(var(--fw)/2);aspect-ratio:auto;transform:translateY(-9vh);transform:translateY(-9svh);opacity:0;transition:opacity .25s var(--ease),transform .25s var(--ease)}
-.frame.on{opacity:1}
-.frame.hit{transform:translateY(-9vh) scale(1.06);transform:translateY(-9svh) scale(1.06)}
-.scbot .msg{min-height:3em;display:flex;align-items:center;justify-content:center}
-@media (prefers-reduced-motion:reduce){.frame{transition:none}}
 </style>
 </head>
 <body>
@@ -820,9 +812,9 @@ $$(".js-newfood").forEach(function(b){b.onclick=openManual});
 $$(".js-newrecipe").forEach(function(b){b.onclick=createRecipeFromAdd});
 $$(".top2 .seg button").forEach(function(b){b.onclick=function(){closeSheet(true);tab(b.dataset.t)}});
 $("#close").onclick=function(){$("#add").close()};
-$("#add").addEventListener("close",function(){document.body.appendChild($("#toast"));stopCam();releaseOCR();scanMode=false;manualMode=false;$("#t-scan").hidden=true;closeSheet(true);var was=rmode;rmode=false;$("#add").classList.remove("rmode","manual");mnames();
+$("#add").addEventListener("close",function(){document.body.appendChild($("#toast"));stopCam();scanMode=false;manualMode=false;$("#t-scan").hidden=true;closeSheet(true);var was=rmode;rmode=false;$("#add").classList.remove("rmode","manual");mnames();
   if(was&&$("#rec").open)edRender();else if(view0==="diary")render()});
-function smsg(t,err){var m=$("#smsg");if(m.textContent!==t)m.textContent=t;m.className="msg"+(err?" err":"")}
+function smsg(t,err){var m=$("#smsg");m.textContent=t;m.className="msg"+(err?" err":"")}
 function commit(e){var id=Date.now()+Math.random();e.id=id;if(FICON[e.ic])setIconPref(e.n,e.ic);rememberFood(e);
   if(rmode){draft.ing.push(e);edRender();toast("Added to recipe",function(){draft.ing=draft.ing.filter(function(y){return y.id!==id});edRender()})}
   else{e.m=meal;addRaw(e);toast("Added to "+meal.toLowerCase(),function(){delEntry(id);if(view0==="diary")render()})}
@@ -830,87 +822,71 @@ function commit(e){var id=Date.now()+Math.random();e.id=id;if(FICON[e.ic])setIco
 function addEntry(n,k,p,c,f,q,img,ic,gu){return commit({n:n,k:k,p:p,c:c,f:f,q:q,gu:cleanGu(gu),i:img||"",ic:FICON[ic]?ic:""})}
 
 /* Scanner */
-var digitReading=false,digitReview=false,digitEpoch=0,ocrLoader=null,autoTimer=null,autoCandidate="",autoRejected="",digitWorker=null;
-function stopCam(){clearTimeout(autoTimer);autoTimer=null;autoCandidate="";digitEpoch++;scanLock=false;$("#frame").classList.remove("on");digitReading=false;digitReview=false;$("#read-digits").disabled=false;if(reader){try{reader.reset()}catch(e){}reader=null}var v=$("#vid");if(v.srcObject){v.srcObject.getTracks().forEach(function(t){t.stop()});v.srcObject=null}}
+var digitReading=false,digitReview=false,digitEpoch=0,ocrLoader=null,autoTimer=null,autoCandidate="",autoRejected="",digitWorker=null,digitInFlightWorker=null,digitPrepare=null;
+function stopCam(){clearTimeout(autoTimer);autoTimer=null;autoCandidate="";digitEpoch++;digitPrepare=null;var oldWorker=digitWorker;digitWorker=null;if(oldWorker&&oldWorker!==digitInFlightWorker)oldWorker.terminate().catch(function(){});digitReading=false;digitReview=false;$("#read-digits").disabled=false;if(reader){try{reader.reset()}catch(e){}reader=null}var v=$("#vid");if(v.srcObject){v.srcObject.getTracks().forEach(function(t){t.stop()});v.srcObject=null}}
 function startCam(){
   if(reader)return;
   if(!window.ZXing||!navigator.mediaDevices){smsg("Scanning needs HTTPS. Type the barcode below.",1);return}
   var F=ZXing.BarcodeFormat,hn=new Map();hn.set(ZXing.DecodeHintType.POSSIBLE_FORMATS,[F.EAN_13,F.EAN_8,F.UPC_A,F.UPC_E]);
-  var rd=reader=new ZXing.BrowserMultiFormatReader(hn,150);$("#vid").onplaying=function(){$("#frame").classList.add("on");warmOCR();scheduleDigits(1200)};smsg("Fit the barcode inside the frame.");
-  rd.decodeFromConstraints({video:{facingMode:{ideal:"environment"},width:{ideal:1280},height:{ideal:720}}},$("#vid"),function(res){
-    if(res&&reader===rd&&!digitReview&&!scanLock){var code=res.getText();scanLock=true;$("#frame").classList.add("hit");$("#bc").value=code;setTimeout(function(){$("#frame").classList.remove("hit")},700);lookup(code)}
-  }).catch(function(){if(reader===rd){stopCam();smsg("Camera is blocked. Allow it in Safari settings, or type the barcode below.",1)}});scheduleDigits(5000)}
+  var rd=reader=new ZXing.BrowserMultiFormatReader(hn,200);smsg("Fit the barcode inside the frame.");
+  rd.decodeFromConstraints({video:{facingMode:{ideal:"environment"}}},$("#vid"),function(res){
+    if(res&&reader===rd&&!digitReview){var code=res.getText();$("#frame").classList.add("hit");stopCam();$("#bc").value=code;setTimeout(function(){$("#frame").classList.remove("hit")},700);lookup(code)}
+  }).catch(function(){if(reader===rd){stopCam();smsg("Camera is blocked. Allow it in Safari settings, or type the barcode below.",1)}});prepareDigitWorker(digitEpoch);scheduleDigits(800)}
 /* OCR reads a local camera frame in the browser. Model assets are loaded only
    when needed. Automatic lookup requires two matching checksum-valid reads. */
 function loadDigitOCR(){if(window.Tesseract)return Promise.resolve(window.Tesseract);if(ocrLoader)return ocrLoader;
   ocrLoader=new Promise(function(resolve,reject){var tag=el("script"),timer=setTimeout(function(){tag.remove();reject(new Error("OCR load timeout"))},30000);
     tag.src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js";tag.onload=function(){clearTimeout(timer);window.Tesseract?resolve(window.Tesseract):reject(new Error("OCR unavailable"))};tag.onerror=function(){clearTimeout(timer);tag.remove();reject(new Error("OCR load failed"))};document.head.appendChild(tag)}).catch(function(e){ocrLoader=null;throw e});return ocrLoader}
-/* One OCR worker, created while the camera warms up and kept for the whole scan session. */
-var digitWorkerP=null,scanLock=false;
-function getDigitWorker(T){if(!digitWorkerP)digitWorkerP=T.createWorker("eng").then(function(w){return w.setParameters({tessedit_char_whitelist:"0123456789",tessedit_pageseg_mode:"7"}).then(function(){digitWorker=w;return w})}).catch(function(e){digitWorkerP=null;throw e});return digitWorkerP}
-function warmOCR(){if(digitWorkerP)return;var go=function(){if(scanMode)loadDigitOCR().then(getDigitWorker).catch(function(){})};window.requestIdleCallback?requestIdleCallback(go,{timeout:2500}):setTimeout(go,800)}
-function releaseOCR(){var p=digitWorkerP;digitWorkerP=null;digitWorker=null;if(p)p.then(function(w){return w.terminate()}).catch(function(){})}
-document.addEventListener("visibilitychange",function(){if(!scanMode||!$("#add").open)return;if(document.hidden)stopCam();else if(!pend)startCam()});
+async function getDigitWorker(T,epoch){if(digitWorker)return digitWorker;var w=await T.createWorker("eng");
+  try{if(epoch!==digitEpoch){await w.terminate();return null}await w.setParameters({tessedit_char_whitelist:"0123456789",tessedit_pageseg_mode:"7"});if(epoch!==digitEpoch){await w.terminate();return null}digitWorker=w;return w}
+  catch(e){try{await w.terminate()}catch(ignore){}throw e}}
+/* Start loading the OCR engine as the scanner opens. Manual and automatic
+   reads share one preparation promise and one worker for this camera session. */
+function prepareDigitWorker(epoch){if(digitPrepare&&digitPrepare.epoch===epoch)return digitPrepare.promise;
+  var job={epoch:epoch,promise:null};job.promise=loadDigitOCR().then(function(T){if(epoch!==digitEpoch)return null;return getDigitWorker(T,epoch)}).catch(function(){return null}).then(function(w){if(!w&&digitPrepare===job)digitPrepare=null;return w});digitPrepare=job;return job.promise}
 function validBarcodeCheck(code){if(!/^(?:\d{8}|\d{12,14})$/.test(code))return false;var sum=0;for(var i=code.length-2,weight=3;i>=0;i--,weight=4-weight)sum+=Number(code[i])*weight;return (10-sum%10)%10===Number(code[code.length-1])}
 function extractDigits(text){var lines=String(text||"").split(/\r?\n/),candidates=[];lines.forEach(function(line){var n=line.replace(/\D/g,"");if(n.length>=6&&n.length<=14&&candidates.indexOf(n)<0)candidates.push(n)});
   candidates.sort(function(a,b){return Number(validBarcodeCheck(b))-Number(validBarcodeCheck(a))});return candidates[0]||""}
 function digitCanvas(video,lower){var vr=video.getBoundingClientRect(),fr=$("#frame").getBoundingClientRect(),scale=Math.max(vr.width/video.videoWidth,vr.height/video.videoHeight),ox=(vr.width-video.videoWidth*scale)/2,oy=(vr.height-video.videoHeight*scale)/2;
   var sx=Math.max(0,(fr.left-vr.left-ox)/scale),sy=Math.max(0,(fr.top+fr.height*(lower?.5:.22)-vr.top-oy)/scale),sw=Math.min(video.videoWidth-sx,fr.width/scale),sh=Math.min(video.videoHeight-sy,fr.height*(lower?.9:.56)/scale);
-  if(!(sw>0&&sh>0))throw new Error("Camera frame unavailable");var canvas=el("canvas");canvas.width=Math.min(900,Math.max(640,Math.round(sw)));canvas.height=Math.round(canvas.width*sh/sw);canvas.getContext("2d").drawImage(video,sx,sy,sw,sh,0,0,canvas.width,canvas.height);return canvas}
+  if(!(sw>0&&sh>0))throw new Error("Camera frame unavailable");var canvas=el("canvas");canvas.width=Math.min(1200,Math.max(900,Math.round(sw)));canvas.height=Math.round(canvas.width*sh/sw);canvas.getContext("2d").drawImage(video,sx,sy,sw,sh,0,0,canvas.width,canvas.height);return canvas}
 function scheduleDigits(ms){clearTimeout(autoTimer);autoTimer=setTimeout(autoReadDigits,ms)}
 async function autoReadDigits(){autoTimer=null;if(!scanMode||!reader||pend||digitReview)return;var video=$("#vid");
-  if(digitReading||document.activeElement===$("#bc")||$("#bc").value.trim()||!video.srcObject||!video.videoWidth||!video.videoHeight){scheduleDigits(3000);return}
+  if(digitReading||document.activeElement===$("#bc")||$("#bc").value.trim()||!video.srcObject||!video.videoWidth||!video.videoHeight){scheduleDigits(800);return}
   digitReading=true;$("#read-digits").disabled=true;var epoch=digitEpoch,worker=null,next=9000;
-  try{var lower=digitCanvas(video,true),middle=digitCanvas(video,false);var T=await loadDigitOCR();if(epoch!==digitEpoch)return;
-    worker=await getDigitWorker(T,epoch);if(!worker||epoch!==digitEpoch)return;
+  try{worker=await prepareDigitWorker(epoch);if(epoch!==digitEpoch)return;if(!worker)throw new Error("OCR unavailable");
+    if(!scanMode||!reader||pend||digitReview||document.activeElement===$("#bc")||$("#bc").value.trim())return;
+    digitInFlightWorker=worker;smsg("Scanning barcode and checking printed numbers…");var lower=digitCanvas(video,true);
     var res=await worker.recognize(lower);if(epoch!==digitEpoch)return;var code=extractDigits(res&&res.data&&res.data.text);
-    if(!validBarcodeCheck(code)){res=await worker.recognize(middle);if(epoch!==digitEpoch)return;code=extractDigits(res&&res.data&&res.data.text)}
+    if(!validBarcodeCheck(code)){res=await worker.recognize(digitCanvas(video,false));if(epoch!==digitEpoch)return;code=extractDigits(res&&res.data&&res.data.text)}
     if(validBarcodeCheck(code)&&code!==autoRejected){if(code===autoCandidate){stopCam();$("#bc").value=code;lookup(code,true);return}autoCandidate=code;next=2000;smsg("Checking printed numbers again…")}
     else{autoCandidate="";smsg("Still scanning. Keep the barcode and numbers in view.")}
   }catch(e){if(epoch===digitEpoch){autoCandidate="";smsg("Still scanning. You can also type the barcode below.")}}
-  finally{if(epoch===digitEpoch){digitReading=false;$("#read-digits").disabled=false;if(scanMode&&!digitReview)scheduleDigits(next)}}}
+  finally{if(digitInFlightWorker===worker)digitInFlightWorker=null;if(worker&&epoch!==digitEpoch)try{await worker.terminate()}catch(e){}if(epoch===digitEpoch){digitReading=false;$("#read-digits").disabled=false;if(scanMode&&!digitReview)scheduleDigits(next)}}}
 $("#read-digits").onclick=async function(){if(digitReading)return;var video=$("#vid");if(!video.srcObject||!video.videoWidth||!video.videoHeight){digitReview=false;startCam();smsg("Aim the numbers inside the frame, then tap Read numbers.");return}
   digitReading=true;digitReview=true;this.disabled=true;var epoch=digitEpoch,worker=null;
-  try{var canvas=digitCanvas(video,false);
-    smsg("Reading numbers… first use may take a moment.");var T=await loadDigitOCR();if(epoch!==digitEpoch)return;
-    worker=await getDigitWorker(T,epoch);if(!worker||epoch!==digitEpoch)return;
-    var result=await worker.recognize(canvas);if(epoch!==digitEpoch)return;var code=extractDigits(result&&result.data&&result.data.text);
+  try{smsg("Reading numbers… first use may take a moment.");worker=await prepareDigitWorker(epoch);if(epoch!==digitEpoch)return;if(!worker)throw new Error("OCR unavailable");
+    digitInFlightWorker=worker;var canvas=digitCanvas(video,false);var result=await worker.recognize(canvas);if(epoch!==digitEpoch)return;var code=extractDigits(result&&result.data&&result.data.text);
     if(code){$("#bc").value=code;smsg("Check every digit below, then tap Look up. Edit any mistakes.")}
     else smsg("Couldn’t read the numbers. Aim them inside the frame and try again, or type them below.",1);
   }catch(e){if(epoch===digitEpoch)smsg("Couldn’t read the numbers. Check your connection and try again, or type them below.",1)}
-  finally{if(epoch===digitEpoch){digitReading=false;$("#read-digits").disabled=false}}};
+  finally{if(digitInFlightWorker===worker)digitInFlightWorker=null;if(worker&&epoch!==digitEpoch)try{await worker.terminate()}catch(e){}if(epoch===digitEpoch){digitReading=false;$("#read-digits").disabled=false}}};
 $("#bcgo").onclick=function(){lookup($("#bc").value.trim())};
 $("#bc").onkeydown=function(e){if(e.key==="Enter")$("#bcgo").click()};
 
 /* Open Food Facts */
 var OFF="https://world.openfoodfacts.org",FIELDS="code,product_name,brands,nutriments,serving_quantity,serving_size,product_quantity,quantity,categories_tags,image_front_small_url";
-var FDC_KEY="DEMO_KEY"; /* Replace with your free key from fdc.nal.gov/api-key-signup (DEMO_KEY is heavily rate limited). */
-function titleCase(t){return String(t||"").toLowerCase().replace(/\b[a-z]/g,function(c){return c.toUpperCase()})}
 function norm(p){var n=p.nutriments||{},k=n["energy-kcal_100g"];if(k==null&&n["energy_100g"]!=null)k=n["energy_100g"]/4.184;
   if(k==null||!p.product_name)return null;
-  var sv=parseFloat(p.serving_quantity)||0,ks=parseFloat(n["energy-kcal_serving"]),o={k:k,p:n.proteins_100g||0,c:n.carbohydrates_100g||0,f:n.fat_100g||0},alt=null;
-  /* Per-serving values are what the label prints; the per-100g field is often derived or stale. Prefer serving values when the two disagree. */
-  if(sv>0&&ks>0){var d=ks/sv*100;if(Math.abs(d-k)/d>.03){alt={s:"Open Food Facts per-100g field",k:k*sv/100,srv:1};
-    var sp=function(key,old){var v=parseFloat(n[key+"_serving"]);return isFinite(v)?v/sv*100:old};o={k:d,p:sp("proteins",o.p),c:sp("carbohydrates",o.c),f:sp("fat",o.f)}}}
-  return{barcode:/^\d{6,14}$/.test(String(p.code||""))?String(p.code):"",n:p.product_name,b:p.brands||"",k:o.k,p:o.p,c:o.c,f:o.f,g:sv||100,sv:sv,ss:String(p.serving_size||"").slice(0,120),cats:Array.isArray(p.categories_tags)?p.categories_tags.join(" "):"",i:p.image_front_small_url||"",src:"Open Food Facts",alt:alt}}
-/* USDA Branded Foods carries manufacturer label data, matched by exact UPC. */
-function fdcLookup(code){var key=barcodeKey(code);if(!key||!FDC_KEY)return Promise.resolve(null);var ctl=new AbortController(),t=setTimeout(function(){ctl.abort()},5000);
-  return fetch("https://api.nal.usda.gov/fdc/v1/foods/search?api_key="+FDC_KEY+"&dataType=Branded&pageSize=5&query="+code,{signal:ctl.signal}).then(function(r){return r.ok?r.json():null}).then(function(j){clearTimeout(t);
-    var m=((j&&j.foods)||[]).filter(function(x){return barcodeKey(x.gtinUpc)===key})[0];if(!m)return null;
-    var nu=function(id){var x=(m.foodNutrients||[]).filter(function(y){return y.nutrientId===id})[0];return x&&isFinite(x.value)?x.value:null},k=nu(1008);if(k==null)return null;
-    var u=String(m.servingSizeUnit||"").toLowerCase(),sv=(u==="g"||u==="grm"||u==="ml"||u==="mlt")&&m.servingSize>0?Number(m.servingSize):0;
-    return{barcode:code,n:titleCase(m.description),b:titleCase(m.brandName||m.brandOwner||""),k:k,p:nu(1003)||0,c:nu(1005)||0,f:nu(1004)||0,g:sv||100,sv:sv,ss:m.householdServingFullText?m.householdServingFullText+(sv?" ("+sv+"g)":""):(sv?sv+"g":""),cats:"",i:"",src:"USDA label data",alt:null}}).catch(function(){clearTimeout(t);return null})}
-function pickSource(o,u){if(!o)return u;if(!u)return o;if(Math.abs(o.k-u.k)/Math.max(u.k,1)<=.03)return o;
-  var w=Object.assign({},u);w.n=o.n;w.b=o.b||u.b;w.i=o.i;w.cats=o.cats;w.sv=u.sv||o.sv;w.ss=u.ss||o.ss;w.alt={s:o.src,k:o.sv?o.k*o.sv/100:o.k,srv:!!o.sv};return w}
+  var sv=parseFloat(p.serving_quantity)||0;
+  return{barcode:/^\d{6,14}$/.test(String(p.code||""))?String(p.code):"",n:p.product_name,b:p.brands||"",k:k,p:n.proteins_100g||0,c:n.carbohydrates_100g||0,f:n.fat_100g||0,g:sv||100,sv:sv,ss:String(p.serving_size||"").slice(0,120),cats:Array.isArray(p.categories_tags)?p.categories_tags.join(" "):"",i:p.image_front_small_url||""}}
 function lookup(code,fromOCR){
   if(!/^\d{6,14}$/.test(code)){smsg("Enter 6 to 14 digits.",1);return}
   smsg("Looking up "+code+"...");
-  Promise.all([fetch(OFF+"/api/v2/product/"+code+".json?fields="+FIELDS+",nutriments").then(function(r){return r.json()}).then(function(j){return j.status===1&&norm(j.product)||null}).catch(function(){return"fail"}),fdcLookup(code),barcodeReady]).then(function(v){
-    var o=v[0]==="fail"?null:v[0],u=v[1];
-    if(v[0]==="fail"&&!u){smsg("Could not reach the food database. Check your connection.",1);scanLock=false;if(scanMode&&!pend)startCam();return}
-    var f=pickSource(o,u);
-    if(!f){if(fromOCR)autoRejected=code;smsg("No nutrition data for that barcode. Try Search or type the number.",1);setTimeout(function(){scanLock=false;if(scanMode&&!pend)startCam()},1600);return}
-    f.barcode=code;f.ocr=!!fromOCR;smsg("Found it.");show(f)})}
+  Promise.all([fetch(OFF+"/api/v2/product/"+code+".json?fields="+FIELDS).then(function(r){return r.json()}),barcodeReady]).then(function(values){var j=values[0];
+    var f=j.status===1&&norm(j.product);
+    if(!f){if(fromOCR)autoRejected=code;smsg("No nutrition data for that barcode. Try Search or type the number.",1);setTimeout(function(){if(scanMode&&!pend)startCam()},1600);return}
+    f.barcode=code;f.ocr=!!fromOCR;smsg("Found it.");show(f)}).catch(function(){smsg("Could not reach Open Food Facts. Check your connection.",1);if(scanMode)startCam()})}
 function barcodeKey(code){code=String(code||"");return /^\d{6,14}$/.test(code)?code.padStart(14,"0"):""}
 function validNutrition(n){return n&&["k","p","c","f"].every(function(x){return typeof n[x]==="number"&&isFinite(n[x])&&n[x]>=0&&n[x]<=10000000})}
 /* Site barcode file contains only per-barcode nutrition and serving settings.
@@ -926,7 +902,7 @@ function loadSiteBarcodes(){barcodeFileStatus="loading";var request=Promise.reso
   return Promise.race([request,new Promise(function(_,reject){setTimeout(function(){reject(new Error("barcode file timeout"))},7000)})]).then(function(o){if(o===null){siteBarcodes={barcodeServings:{},barcodeNutrition:{}};barcodeFileStatus="missing";return}if(!siteFileValid(o))throw new Error("invalid barcode file");siteBarcodes=barcodeSubset(o,false);barcodeFileStatus="ok"}).catch(function(){barcodeFileStatus="error";barcodeMessage("Could not load the website barcode file. Local food data still works.",true)})}
 var barcodeReady=loadSiteBarcodes();
 function localValue(field,key){var all=barcodeSubset(S,true)[field];return Object.prototype.hasOwnProperty.call(all,key)?all[key]:undefined}
-function productInfo(){if(!pend)return;$("#pi").textContent=(pend.b?pend.b+". ":"")+(pend.ss?"Serving: "+pend.ss+". ":"")+(pend.sv?r0(pend.k*pend.sv/100)+" cal per serving":r0(pend.k)+" cal per 100g")+(pend.corrected?" · Your label values":(pend.src?" · "+pend.src:""))+(!pend.corrected&&pend.alt?". "+pend.alt.s+" lists "+r0(pend.alt.k)+(pend.alt.srv?" per serving":" per 100g"):"")+(pend.ocr?". Check printed barcode: "+pend.barcode:"")}
+function productInfo(){if(!pend)return;$("#pi").textContent=(pend.b?pend.b+". ":"")+(pend.ss?"Serving: "+pend.ss+". ":"")+r0(pend.k)+" cal per 100g"+(pend.corrected?" · Your label values":"")+(pend.ocr?". Check printed barcode: "+pend.barcode:"")}
 function pDefaultGu(u){if(!pend)return defaultGu(u);if(u==="serving")return pend.sv||100;if(u==="scoop")return pend.sv||30;if(u==="each")return pend.sv||50;return defaultGu(u)}
 var pPreviousUnit="g";
 function pGu(unit){if(!pend)return 0;var u=unit||$("#pu").value||"g",d=unitDef(u);if(u==="serving")return parseFloat($("#pconv").value)||pend.sv||100;return(d.type==="volume"||d.type==="count")?(parseFloat($("#pconv").value)||0):(d.g||0)}
@@ -1409,5 +1385,5 @@ syncFoodDb();save();setMeal(meal);view("diary");
 if(/^#recipe=/.test(location.hash)){var code=location.hash;history.replaceState(null,"",location.pathname+location.search);view("recipes");showImport(code)}
 })();
 </script>
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a53ebfe18a70982d',t:'MTc5MzU3NjQ3OA=='};var l=window.parent.location,o;try{o=new URL(l.origin).origin}catch(e){try{o=new URL(new URL(l.href).origin).origin}catch(e){o=''}}var u='/cdn-cgi/challenge-platform/scripts/jsd/main.js?ray=a53ebfe18a70982d',a=document.createElement('script');a.src=o?new URL(u,o).href:u;document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a53ef216a9f6917f',t:'MTc5MzU3ODUzNQ=='};var l=window.parent.location,o;try{o=new URL(l.origin).origin}catch(e){try{o=new URL(new URL(l.href).origin).origin}catch(e){o=''}}var u='/cdn-cgi/challenge-platform/scripts/jsd/main.js?ray=a53ef216a9f6917f',a=document.createElement('script');a.src=o?new URL(u,o).href:u;document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
