@@ -264,6 +264,14 @@ dialog.mini{max-height:92svh;overflow:auto}
 .pedit{display:block;margin:4px auto 0;color:var(--ac);font-size:.8125rem;font-weight:700;padding:5px 10px}
 .label-dialog{max-height:90vh;overflow-y:auto}.label-dialog input{width:100%}
 .sheet .unitfield label,#ed .unitfield label{margin-top:0}
+
+/* Scanner: frame is centered by the layout (not by % of a resizing box), and stays hidden until the camera is live */
+#add{height:100vh;height:100dvh}
+.frame{--fw:min(80vw,380px);inset:0;margin:auto;width:var(--fw);height:calc(var(--fw)/2);aspect-ratio:auto;transform:translateY(-9vh);transform:translateY(-9svh);opacity:0;transition:opacity .25s var(--ease),transform .25s var(--ease)}
+.frame.on{opacity:1}
+.frame.hit{transform:translateY(-9vh) scale(1.06);transform:translateY(-9svh) scale(1.06)}
+.scbot .msg{min-height:3em;display:flex;align-items:center;justify-content:center}
+@media (prefers-reduced-motion:reduce){.frame{transition:none}}
 </style>
 </head>
 <body>
@@ -379,7 +387,13 @@ SOFTWARE.
     <div class="card"><p class="sub">Your data lives only on this device. Backups include everything: diary, recipes, weigh-ins, and your My Food database &mdash; including foods you created yourself.</p>
       <button class="btn full" id="expd" type="button">Download backup file</button>
       <button class="btn full" id="exp" type="button">Copy backup as text</button>
-      <button class="btn pri full" id="bkopen" type="button">Restore backup</button></div>
+      <button class="btn pri full" id="bkopen" type="button">Restore backup</button>
+      <h3 style="margin-top:20px">Barcode corrections file</h3>
+      <p class="sub">Export only saved barcode servings and label values for your GitHub site. A public repository makes these foods public; your diary, weight and recipes are not included.</p>
+      <button class="btn full" id="barcode-export" type="button">Export barcode file</button>
+      <button class="btn full" id="barcode-from-backup" type="button">Export barcodes from a backup</button>
+      <input type="file" id="barcode-backup-file" accept=".json,application/json" hidden>
+      <p class="msg" id="barcode-msg" role="status"></p></div>
   </section>
 </main>
 
@@ -446,6 +460,7 @@ SOFTWARE.
 
   <div class="sheet" id="sheet" role="group" aria-label="Review food">
     <div class="sh"><div id="pimg"></div><div><h3 id="pn"></h3><p class="sub" id="pi"></p></div><button class="xs" id="pc" type="button" aria-label="Cancel">&times;</button></div>
+    <button class="btn full" id="label-edit" style="margin-top:8px" type="button" hidden>Edit calories &amp; macros</button>
     <div class="step"><button type="button" id="dec" aria-label="Less">-</button><input id="pg" type="number" inputmode="decimal" enterkeyhint="done" aria-label="Amount"><button type="button" id="inc" aria-label="More">+</button></div>
     <div class="unitfield"><label for="pu">Unit</label><select id="pu"></select></div>
     <button id="pedit" class="pedit" type="button" aria-expanded="false" aria-controls="pconvwrap" hidden>Edit grams per unit</button>
@@ -453,7 +468,6 @@ SOFTWARE.
     <p class="sub convnote" id="pgrams" role="status"></p>
     <div class="chips" id="pch"></div>
     <div class="tot"><b id="ptk"></b><span id="ptm"></span></div>
-    <button class="pedit" id="label-edit" type="button" hidden>Edit label values</button>
     <div class="seg mealseg" aria-label="Meal" style="margin-bottom:0"></div>
     <button class="btn pri full" id="pgo" type="button">Add to <span class="mname"></span></button>
   </div>
@@ -497,6 +511,7 @@ SOFTWARE.
   <label style="margin-top:14px">Amount</label>
   <div class="step" style="margin-top:0"><button type="button" id="edm" aria-label="Less">-</button><input id="ed-a" type="number" inputmode="decimal" enterkeyhint="done" aria-label="Amount"><button type="button" id="edp" aria-label="More">+</button></div>
   <div class="unitfield"><label for="ed-unit">Unit</label><select id="ed-unit"></select></div>
+  <button id="ed-gu-edit" class="pedit" type="button" aria-expanded="false" aria-controls="ed-gu-wrap" hidden>Edit grams per unit</button>
   <div class="unitfield" id="ed-gu-wrap" hidden><label for="ed-gu" id="ed-gu-lbl">Grams per unit</label><input id="ed-gu" type="number" inputmode="decimal" enterkeyhint="done"></div>
   <p class="sub convnote" id="ed-u"></p>
   <div class="chips" id="ed-ch"></div>
@@ -805,9 +820,9 @@ $$(".js-newfood").forEach(function(b){b.onclick=openManual});
 $$(".js-newrecipe").forEach(function(b){b.onclick=createRecipeFromAdd});
 $$(".top2 .seg button").forEach(function(b){b.onclick=function(){closeSheet(true);tab(b.dataset.t)}});
 $("#close").onclick=function(){$("#add").close()};
-$("#add").addEventListener("close",function(){document.body.appendChild($("#toast"));stopCam();scanMode=false;manualMode=false;$("#t-scan").hidden=true;closeSheet(true);var was=rmode;rmode=false;$("#add").classList.remove("rmode","manual");mnames();
+$("#add").addEventListener("close",function(){document.body.appendChild($("#toast"));stopCam();releaseOCR();scanMode=false;manualMode=false;$("#t-scan").hidden=true;closeSheet(true);var was=rmode;rmode=false;$("#add").classList.remove("rmode","manual");mnames();
   if(was&&$("#rec").open)edRender();else if(view0==="diary")render()});
-function smsg(t,err){var m=$("#smsg");m.textContent=t;m.className="msg"+(err?" err":"")}
+function smsg(t,err){var m=$("#smsg");if(m.textContent!==t)m.textContent=t;m.className="msg"+(err?" err":"")}
 function commit(e){var id=Date.now()+Math.random();e.id=id;if(FICON[e.ic])setIconPref(e.n,e.ic);rememberFood(e);
   if(rmode){draft.ing.push(e);edRender();toast("Added to recipe",function(){draft.ing=draft.ing.filter(function(y){return y.id!==id});edRender()})}
   else{e.m=meal;addRaw(e);toast("Added to "+meal.toLowerCase(),function(){delEntry(id);if(view0==="diary")render()})}
@@ -816,41 +831,44 @@ function addEntry(n,k,p,c,f,q,img,ic,gu){return commit({n:n,k:k,p:p,c:c,f:f,q:q,
 
 /* Scanner */
 var digitReading=false,digitReview=false,digitEpoch=0,ocrLoader=null,autoTimer=null,autoCandidate="",autoRejected="",digitWorker=null;
-function stopCam(){clearTimeout(autoTimer);autoTimer=null;autoCandidate="";digitEpoch++;var oldWorker=digitWorker;digitWorker=null;if(oldWorker&&!digitReading)oldWorker.terminate().catch(function(){});digitReading=false;digitReview=false;$("#read-digits").disabled=false;if(reader){try{reader.reset()}catch(e){}reader=null}var v=$("#vid");if(v.srcObject){v.srcObject.getTracks().forEach(function(t){t.stop()});v.srcObject=null}}
+function stopCam(){clearTimeout(autoTimer);autoTimer=null;autoCandidate="";digitEpoch++;scanLock=false;$("#frame").classList.remove("on");digitReading=false;digitReview=false;$("#read-digits").disabled=false;if(reader){try{reader.reset()}catch(e){}reader=null}var v=$("#vid");if(v.srcObject){v.srcObject.getTracks().forEach(function(t){t.stop()});v.srcObject=null}}
 function startCam(){
   if(reader)return;
   if(!window.ZXing||!navigator.mediaDevices){smsg("Scanning needs HTTPS. Type the barcode below.",1);return}
   var F=ZXing.BarcodeFormat,hn=new Map();hn.set(ZXing.DecodeHintType.POSSIBLE_FORMATS,[F.EAN_13,F.EAN_8,F.UPC_A,F.UPC_E]);
-  var rd=reader=new ZXing.BrowserMultiFormatReader(hn,200);smsg("Fit the barcode inside the frame.");
-  rd.decodeFromConstraints({video:{facingMode:{ideal:"environment"}}},$("#vid"),function(res){
-    if(res&&reader===rd&&!digitReview){var code=res.getText();$("#frame").classList.add("hit");stopCam();$("#bc").value=code;setTimeout(function(){$("#frame").classList.remove("hit")},700);lookup(code)}
+  var rd=reader=new ZXing.BrowserMultiFormatReader(hn,150);$("#vid").onplaying=function(){$("#frame").classList.add("on");warmOCR();scheduleDigits(1200)};smsg("Fit the barcode inside the frame.");
+  rd.decodeFromConstraints({video:{facingMode:{ideal:"environment"},width:{ideal:1280},height:{ideal:720}}},$("#vid"),function(res){
+    if(res&&reader===rd&&!digitReview&&!scanLock){var code=res.getText();scanLock=true;$("#frame").classList.add("hit");$("#bc").value=code;setTimeout(function(){$("#frame").classList.remove("hit")},700);lookup(code)}
   }).catch(function(){if(reader===rd){stopCam();smsg("Camera is blocked. Allow it in Safari settings, or type the barcode below.",1)}});scheduleDigits(5000)}
 /* OCR reads a local camera frame in the browser. Model assets are loaded only
    when needed. Automatic lookup requires two matching checksum-valid reads. */
 function loadDigitOCR(){if(window.Tesseract)return Promise.resolve(window.Tesseract);if(ocrLoader)return ocrLoader;
   ocrLoader=new Promise(function(resolve,reject){var tag=el("script"),timer=setTimeout(function(){tag.remove();reject(new Error("OCR load timeout"))},30000);
     tag.src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js";tag.onload=function(){clearTimeout(timer);window.Tesseract?resolve(window.Tesseract):reject(new Error("OCR unavailable"))};tag.onerror=function(){clearTimeout(timer);tag.remove();reject(new Error("OCR load failed"))};document.head.appendChild(tag)}).catch(function(e){ocrLoader=null;throw e});return ocrLoader}
-async function getDigitWorker(T,epoch){if(digitWorker)return digitWorker;var w=await T.createWorker("eng");
-  try{if(epoch!==digitEpoch){await w.terminate();return null}await w.setParameters({tessedit_char_whitelist:"0123456789",tessedit_pageseg_mode:"7"});if(epoch!==digitEpoch){await w.terminate();return null}digitWorker=w;return w}
-  catch(e){try{await w.terminate()}catch(ignore){}throw e}}
+/* One OCR worker, created while the camera warms up and kept for the whole scan session. */
+var digitWorkerP=null,scanLock=false;
+function getDigitWorker(T){if(!digitWorkerP)digitWorkerP=T.createWorker("eng").then(function(w){return w.setParameters({tessedit_char_whitelist:"0123456789",tessedit_pageseg_mode:"7"}).then(function(){digitWorker=w;return w})}).catch(function(e){digitWorkerP=null;throw e});return digitWorkerP}
+function warmOCR(){if(digitWorkerP)return;var go=function(){if(scanMode)loadDigitOCR().then(getDigitWorker).catch(function(){})};window.requestIdleCallback?requestIdleCallback(go,{timeout:2500}):setTimeout(go,800)}
+function releaseOCR(){var p=digitWorkerP;digitWorkerP=null;digitWorker=null;if(p)p.then(function(w){return w.terminate()}).catch(function(){})}
+document.addEventListener("visibilitychange",function(){if(!scanMode||!$("#add").open)return;if(document.hidden)stopCam();else if(!pend)startCam()});
 function validBarcodeCheck(code){if(!/^(?:\d{8}|\d{12,14})$/.test(code))return false;var sum=0;for(var i=code.length-2,weight=3;i>=0;i--,weight=4-weight)sum+=Number(code[i])*weight;return (10-sum%10)%10===Number(code[code.length-1])}
 function extractDigits(text){var lines=String(text||"").split(/\r?\n/),candidates=[];lines.forEach(function(line){var n=line.replace(/\D/g,"");if(n.length>=6&&n.length<=14&&candidates.indexOf(n)<0)candidates.push(n)});
   candidates.sort(function(a,b){return Number(validBarcodeCheck(b))-Number(validBarcodeCheck(a))});return candidates[0]||""}
 function digitCanvas(video,lower){var vr=video.getBoundingClientRect(),fr=$("#frame").getBoundingClientRect(),scale=Math.max(vr.width/video.videoWidth,vr.height/video.videoHeight),ox=(vr.width-video.videoWidth*scale)/2,oy=(vr.height-video.videoHeight*scale)/2;
   var sx=Math.max(0,(fr.left-vr.left-ox)/scale),sy=Math.max(0,(fr.top+fr.height*(lower?.5:.22)-vr.top-oy)/scale),sw=Math.min(video.videoWidth-sx,fr.width/scale),sh=Math.min(video.videoHeight-sy,fr.height*(lower?.9:.56)/scale);
-  if(!(sw>0&&sh>0))throw new Error("Camera frame unavailable");var canvas=el("canvas");canvas.width=Math.min(1200,Math.max(900,Math.round(sw)));canvas.height=Math.round(canvas.width*sh/sw);canvas.getContext("2d").drawImage(video,sx,sy,sw,sh,0,0,canvas.width,canvas.height);return canvas}
+  if(!(sw>0&&sh>0))throw new Error("Camera frame unavailable");var canvas=el("canvas");canvas.width=Math.min(900,Math.max(640,Math.round(sw)));canvas.height=Math.round(canvas.width*sh/sw);canvas.getContext("2d").drawImage(video,sx,sy,sw,sh,0,0,canvas.width,canvas.height);return canvas}
 function scheduleDigits(ms){clearTimeout(autoTimer);autoTimer=setTimeout(autoReadDigits,ms)}
 async function autoReadDigits(){autoTimer=null;if(!scanMode||!reader||pend||digitReview)return;var video=$("#vid");
   if(digitReading||document.activeElement===$("#bc")||$("#bc").value.trim()||!video.srcObject||!video.videoWidth||!video.videoHeight){scheduleDigits(3000);return}
   digitReading=true;$("#read-digits").disabled=true;var epoch=digitEpoch,worker=null,next=9000;
-  try{var lower=digitCanvas(video,true),middle=digitCanvas(video,false);smsg("Scanning barcode and checking printed numbers…");var T=await loadDigitOCR();if(epoch!==digitEpoch)return;
+  try{var lower=digitCanvas(video,true),middle=digitCanvas(video,false);var T=await loadDigitOCR();if(epoch!==digitEpoch)return;
     worker=await getDigitWorker(T,epoch);if(!worker||epoch!==digitEpoch)return;
     var res=await worker.recognize(lower);if(epoch!==digitEpoch)return;var code=extractDigits(res&&res.data&&res.data.text);
     if(!validBarcodeCheck(code)){res=await worker.recognize(middle);if(epoch!==digitEpoch)return;code=extractDigits(res&&res.data&&res.data.text)}
     if(validBarcodeCheck(code)&&code!==autoRejected){if(code===autoCandidate){stopCam();$("#bc").value=code;lookup(code,true);return}autoCandidate=code;next=2000;smsg("Checking printed numbers again…")}
     else{autoCandidate="";smsg("Still scanning. Keep the barcode and numbers in view.")}
   }catch(e){if(epoch===digitEpoch){autoCandidate="";smsg("Still scanning. You can also type the barcode below.")}}
-  finally{if(worker&&epoch!==digitEpoch)try{await worker.terminate()}catch(e){}if(epoch===digitEpoch){digitReading=false;$("#read-digits").disabled=false;if(scanMode&&!digitReview)scheduleDigits(next)}}}
+  finally{if(epoch===digitEpoch){digitReading=false;$("#read-digits").disabled=false;if(scanMode&&!digitReview)scheduleDigits(next)}}}
 $("#read-digits").onclick=async function(){if(digitReading)return;var video=$("#vid");if(!video.srcObject||!video.videoWidth||!video.videoHeight){digitReview=false;startCam();smsg("Aim the numbers inside the frame, then tap Read numbers.");return}
   digitReading=true;digitReview=true;this.disabled=true;var epoch=digitEpoch,worker=null;
   try{var canvas=digitCanvas(video,false);
@@ -860,26 +878,55 @@ $("#read-digits").onclick=async function(){if(digitReading)return;var video=$("#
     if(code){$("#bc").value=code;smsg("Check every digit below, then tap Look up. Edit any mistakes.")}
     else smsg("Couldn’t read the numbers. Aim them inside the frame and try again, or type them below.",1);
   }catch(e){if(epoch===digitEpoch)smsg("Couldn’t read the numbers. Check your connection and try again, or type them below.",1)}
-  finally{if(worker&&epoch!==digitEpoch)try{await worker.terminate()}catch(e){}if(epoch===digitEpoch){digitReading=false;$("#read-digits").disabled=false}}};
+  finally{if(epoch===digitEpoch){digitReading=false;$("#read-digits").disabled=false}}};
 $("#bcgo").onclick=function(){lookup($("#bc").value.trim())};
 $("#bc").onkeydown=function(e){if(e.key==="Enter")$("#bcgo").click()};
 
 /* Open Food Facts */
-var OFF="https://world.openfoodfacts.org",FIELDS="product_name,brands,nutriments,serving_quantity,serving_size,product_quantity,quantity,categories_tags,image_front_small_url";
+var OFF="https://world.openfoodfacts.org",FIELDS="code,product_name,brands,nutriments,serving_quantity,serving_size,product_quantity,quantity,categories_tags,image_front_small_url";
+var FDC_KEY="DEMO_KEY"; /* Replace with your free key from fdc.nal.gov/api-key-signup (DEMO_KEY is heavily rate limited). */
+function titleCase(t){return String(t||"").toLowerCase().replace(/\b[a-z]/g,function(c){return c.toUpperCase()})}
 function norm(p){var n=p.nutriments||{},k=n["energy-kcal_100g"];if(k==null&&n["energy_100g"]!=null)k=n["energy_100g"]/4.184;
   if(k==null||!p.product_name)return null;
-  var sv=parseFloat(p.serving_quantity)||0;
-  return{n:p.product_name,b:p.brands||"",k:k,p:n.proteins_100g||0,c:n.carbohydrates_100g||0,f:n.fat_100g||0,g:sv||100,sv:sv,ss:String(p.serving_size||"").slice(0,120),cats:Array.isArray(p.categories_tags)?p.categories_tags.join(" "):"",i:p.image_front_small_url||""}}
+  var sv=parseFloat(p.serving_quantity)||0,ks=parseFloat(n["energy-kcal_serving"]),o={k:k,p:n.proteins_100g||0,c:n.carbohydrates_100g||0,f:n.fat_100g||0},alt=null;
+  /* Per-serving values are what the label prints; the per-100g field is often derived or stale. Prefer serving values when the two disagree. */
+  if(sv>0&&ks>0){var d=ks/sv*100;if(Math.abs(d-k)/d>.03){alt={s:"Open Food Facts per-100g field",k:k*sv/100,srv:1};
+    var sp=function(key,old){var v=parseFloat(n[key+"_serving"]);return isFinite(v)?v/sv*100:old};o={k:d,p:sp("proteins",o.p),c:sp("carbohydrates",o.c),f:sp("fat",o.f)}}}
+  return{barcode:/^\d{6,14}$/.test(String(p.code||""))?String(p.code):"",n:p.product_name,b:p.brands||"",k:o.k,p:o.p,c:o.c,f:o.f,g:sv||100,sv:sv,ss:String(p.serving_size||"").slice(0,120),cats:Array.isArray(p.categories_tags)?p.categories_tags.join(" "):"",i:p.image_front_small_url||"",src:"Open Food Facts",alt:alt}}
+/* USDA Branded Foods carries manufacturer label data, matched by exact UPC. */
+function fdcLookup(code){var key=barcodeKey(code);if(!key||!FDC_KEY)return Promise.resolve(null);var ctl=new AbortController(),t=setTimeout(function(){ctl.abort()},5000);
+  return fetch("https://api.nal.usda.gov/fdc/v1/foods/search?api_key="+FDC_KEY+"&dataType=Branded&pageSize=5&query="+code,{signal:ctl.signal}).then(function(r){return r.ok?r.json():null}).then(function(j){clearTimeout(t);
+    var m=((j&&j.foods)||[]).filter(function(x){return barcodeKey(x.gtinUpc)===key})[0];if(!m)return null;
+    var nu=function(id){var x=(m.foodNutrients||[]).filter(function(y){return y.nutrientId===id})[0];return x&&isFinite(x.value)?x.value:null},k=nu(1008);if(k==null)return null;
+    var u=String(m.servingSizeUnit||"").toLowerCase(),sv=(u==="g"||u==="grm"||u==="ml"||u==="mlt")&&m.servingSize>0?Number(m.servingSize):0;
+    return{barcode:code,n:titleCase(m.description),b:titleCase(m.brandName||m.brandOwner||""),k:k,p:nu(1003)||0,c:nu(1005)||0,f:nu(1004)||0,g:sv||100,sv:sv,ss:m.householdServingFullText?m.householdServingFullText+(sv?" ("+sv+"g)":""):(sv?sv+"g":""),cats:"",i:"",src:"USDA label data",alt:null}}).catch(function(){clearTimeout(t);return null})}
+function pickSource(o,u){if(!o)return u;if(!u)return o;if(Math.abs(o.k-u.k)/Math.max(u.k,1)<=.03)return o;
+  var w=Object.assign({},u);w.n=o.n;w.b=o.b||u.b;w.i=o.i;w.cats=o.cats;w.sv=u.sv||o.sv;w.ss=u.ss||o.ss;w.alt={s:o.src,k:o.sv?o.k*o.sv/100:o.k,srv:!!o.sv};return w}
 function lookup(code,fromOCR){
   if(!/^\d{6,14}$/.test(code)){smsg("Enter 6 to 14 digits.",1);return}
   smsg("Looking up "+code+"...");
-  fetch(OFF+"/api/v2/product/"+code+".json?fields="+FIELDS).then(function(r){return r.json()}).then(function(j){
-    var f=j.status===1&&norm(j.product);
-    if(!f){if(fromOCR)autoRejected=code;smsg("No nutrition data for that barcode. Try Search or type the number.",1);setTimeout(function(){if(scanMode&&!pend)startCam()},1600);return}
-    f.barcode=code;f.ocr=!!fromOCR;smsg("Found it.");show(f)}).catch(function(){smsg("Could not reach Open Food Facts. Check your connection.",1);if(scanMode)startCam()})}
+  Promise.all([fetch(OFF+"/api/v2/product/"+code+".json?fields="+FIELDS+",nutriments").then(function(r){return r.json()}).then(function(j){return j.status===1&&norm(j.product)||null}).catch(function(){return"fail"}),fdcLookup(code),barcodeReady]).then(function(v){
+    var o=v[0]==="fail"?null:v[0],u=v[1];
+    if(v[0]==="fail"&&!u){smsg("Could not reach the food database. Check your connection.",1);scanLock=false;if(scanMode&&!pend)startCam();return}
+    var f=pickSource(o,u);
+    if(!f){if(fromOCR)autoRejected=code;smsg("No nutrition data for that barcode. Try Search or type the number.",1);setTimeout(function(){scanLock=false;if(scanMode&&!pend)startCam()},1600);return}
+    f.barcode=code;f.ocr=!!fromOCR;smsg("Found it.");show(f)})}
 function barcodeKey(code){code=String(code||"");return /^\d{6,14}$/.test(code)?code.padStart(14,"0"):""}
 function validNutrition(n){return n&&["k","p","c","f"].every(function(x){return typeof n[x]==="number"&&isFinite(n[x])&&n[x]>=0&&n[x]<=10000000})}
-function productInfo(){if(!pend)return;$("#pi").textContent=(pend.b?pend.b+". ":"")+(pend.ss?"Serving: "+pend.ss+". ":"")+r0(pend.k)+" cal per 100g"+(pend.corrected?" · Your label values":"")+(pend.ocr?". Check printed barcode: "+pend.barcode:"")}
+/* Site barcode file contains only per-barcode nutrition and serving settings.
+   Local corrections override the site file; a null nutrition value masks one. */
+var siteBarcodes={barcodeServings:{},barcodeNutrition:{}},barcodeFileStatus="loading";
+function validServing(v){return v&&typeof v==="object"&&Object.prototype.hasOwnProperty.call(UNIT,v.u)&&isFinite(Number(v.a))&&Number(v.a)>0&&Number(v.a)<=100000&&cleanGu(v.gu)>0}
+function barcodeSubset(o,allowDeletes){var out={barcodeServings:{},barcodeNutrition:{}};if(!o||typeof o!=="object"||Array.isArray(o))return out;
+  if(o.barcodeServings&&typeof o.barcodeServings==="object"&&!Array.isArray(o.barcodeServings))Object.keys(o.barcodeServings).slice(0,10000).forEach(function(code){var key=barcodeKey(code),v=o.barcodeServings[code];if(key&&validServing(v))out.barcodeServings[key]={a:Number(v.a),u:v.u,gu:cleanGu(v.gu)}});
+  if(o.barcodeNutrition&&typeof o.barcodeNutrition==="object"&&!Array.isArray(o.barcodeNutrition))Object.keys(o.barcodeNutrition).slice(0,10000).forEach(function(code){var key=barcodeKey(code),v=o.barcodeNutrition[code];if(key&&validNutrition(v))out.barcodeNutrition[key]={k:v.k,p:v.p,c:v.c,f:v.f};else if(key&&allowDeletes&&v===null)out.barcodeNutrition[key]=null});return out}
+function mergeBarcodes(){var out={barcodeServings:{},barcodeNutrition:{}};Array.prototype.forEach.call(arguments,function(src){if(!src)return;var b=barcodeSubset(src,true);Object.assign(out.barcodeServings,b.barcodeServings);Object.keys(b.barcodeNutrition).forEach(function(k){if(b.barcodeNutrition[k]===null)delete out.barcodeNutrition[k];else out.barcodeNutrition[k]=b.barcodeNutrition[k]})});return out}
+function siteFileValid(o){return o&&typeof o==="object"&&!Array.isArray(o)&&o.format==="calories-barcode-corrections"&&o.version===1&&o.barcodeServings&&typeof o.barcodeServings==="object"&&!Array.isArray(o.barcodeServings)&&o.barcodeNutrition&&typeof o.barcodeNutrition==="object"&&!Array.isArray(o.barcodeNutrition)}
+function loadSiteBarcodes(){barcodeFileStatus="loading";var request=Promise.resolve().then(function(){return fetch("food-corrections.json",{cache:"no-store"})}).then(function(r){if(r.status===404)return null;if(!r.ok)throw new Error("file unavailable");return r.json()});
+  return Promise.race([request,new Promise(function(_,reject){setTimeout(function(){reject(new Error("barcode file timeout"))},7000)})]).then(function(o){if(o===null){siteBarcodes={barcodeServings:{},barcodeNutrition:{}};barcodeFileStatus="missing";return}if(!siteFileValid(o))throw new Error("invalid barcode file");siteBarcodes=barcodeSubset(o,false);barcodeFileStatus="ok"}).catch(function(){barcodeFileStatus="error";barcodeMessage("Could not load the website barcode file. Local food data still works.",true)})}
+var barcodeReady=loadSiteBarcodes();
+function localValue(field,key){var all=barcodeSubset(S,true)[field];return Object.prototype.hasOwnProperty.call(all,key)?all[key]:undefined}
+function productInfo(){if(!pend)return;$("#pi").textContent=(pend.b?pend.b+". ":"")+(pend.ss?"Serving: "+pend.ss+". ":"")+(pend.sv?r0(pend.k*pend.sv/100)+" cal per serving":r0(pend.k)+" cal per 100g")+(pend.corrected?" · Your label values":(pend.src?" · "+pend.src:""))+(!pend.corrected&&pend.alt?". "+pend.alt.s+" lists "+r0(pend.alt.k)+(pend.alt.srv?" per serving":" per 100g"):"")+(pend.ocr?". Check printed barcode: "+pend.barcode:"")}
 function pDefaultGu(u){if(!pend)return defaultGu(u);if(u==="serving")return pend.sv||100;if(u==="scoop")return pend.sv||30;if(u==="each")return pend.sv||50;return defaultGu(u)}
 var pPreviousUnit="g";
 function pGu(unit){if(!pend)return 0;var u=unit||$("#pu").value||"g",d=unitDef(u);if(u==="serving")return parseFloat($("#pconv").value)||pend.sv||100;return(d.type==="volume"||d.type==="count")?(parseFloat($("#pconv").value)||0):(d.g||0)}
@@ -888,11 +935,11 @@ function syncPUnit(setDefault){var u=$("#pu").value||"g",d=unitDef(u),needs=d.ty
   $("#pedit").hidden=!needs;$("#pconvwrap").hidden=true;$("#pedit").setAttribute("aria-expanded","false");$("#pedit").textContent="Edit grams per unit";
   if(needs){$("#pconv-lbl").textContent="Grams per "+unitShort(u,1);if(setDefault||!$("#pconv").value)$("#pconv").value=fmtAmt(pDefaultGu(u))}pPreviousUnit=u;upd()}
 $("#pedit").onclick=function(){var open=$("#pconvwrap").hidden;$("#pconvwrap").hidden=!open;this.setAttribute("aria-expanded",String(open));this.textContent=open?"Done":"Edit grams per unit";if(open)$("#pconv").focus()};
-function show(f){pend=f;stopCam();var im=$("#pimg");im.textContent="";im.appendChild(thumb(f.i,f.n,64));
-  f.baseNutrition={k:f.k,p:f.p,c:f.c,f:f.f};var key=barcodeKey(f.barcode),custom=key&&S.barcodeNutrition&&S.barcodeNutrition[key];
+function show(f){f=Object.assign({},f);pend=f;stopCam();if(scanMode)$("#t-scan").hidden=true;var im=$("#pimg");im.textContent="";im.appendChild(thumb(f.i,f.n,64));
+  f.baseNutrition={k:f.k,p:f.p,c:f.c,f:f.f};var key=barcodeKey(f.barcode),local=key?localValue("barcodeNutrition",key):undefined,custom=local!==undefined?local:(key&&siteBarcodes.barcodeNutrition[key]);
   if(validNutrition(custom)){f.k=custom.k;f.p=custom.p;f.c=custom.c;f.f=custom.f;f.corrected=true}else f.corrected=false;
   $("#label-edit").hidden=!key;
-  var inf=inferProductServing(f),pref=f.barcode&&S.barcodeServings&&S.barcodeServings[f.barcode];
+  var inf=inferProductServing(f),pref=key&&(localValue("barcodeServings",key)||siteBarcodes.barcodeServings[key]);
   if(pref&&UNIT[pref.u]&&Number(pref.a)>0&&isFinite(Number(pref.a))&&cleanGu(pref.gu))inf={a:Number(pref.a),u:pref.u,gu:cleanGu(pref.gu)};
   $("#pn").textContent=f.n;productInfo();
   fillUnitSelect($("#pu"),inf.u);$("#pconv").value=inf.gu>0?fmtAmt(inf.gu):"";
@@ -900,14 +947,14 @@ function show(f){pend=f;stopCam();var im=$("#pimg");im.textContent="";im.appendC
   [50,100].forEach(function(g){var b=el("button",null,g+"g");b.type="button";b.onclick=function(){$("#pu").value="g";$("#pg").value=g;syncPUnit(true)};c.appendChild(b)});
   if(f.sv&&f.sv!==100&&f.sv!==50){var sb=el("button",null,"1 serving, "+fmtAmt(f.sv)+"g");sb.type="button";sb.onclick=function(){$("#pu").value="serving";$("#pg").value=1;syncPUnit(true)};c.appendChild(sb)}
   $("#pg").value=fmtAmt(inf.a);syncPUnit(false);$("#sheet").classList.add("open")}
-function closeSheet(quiet){$("#sheet").classList.remove("open");pend=null;if(!quiet&&scanMode){$("#bc").value="";startCam()}$("#scanfab").hidden=scanMode||manualMode||curTab!=="search"||!$("#add").open}
+function closeSheet(quiet){$("#sheet").classList.remove("open");pend=null;if(!quiet&&scanMode){$("#bc").value="";$("#t-scan").hidden=false;startCam()}$("#scanfab").hidden=scanMode||manualMode||curTab!=="search"||!$("#add").open}
 function upd(){if(!pend)return;var a=parseFloat($("#pg").value)||0,u=$("#pu").value||"g",d=unitDef(u),gu=pGu(),grams=a*gu,x=grams/100;
   $("#ptk").textContent=r0(pend.k*x)+" cal";$("#ptm").textContent=r1(pend.p*x)+"g protein, "+r1(pend.c*x)+"g carbs, "+r1(pend.f*x)+"g fat";
   var note=$("#pgrams");
   if((d.type==="volume"||d.type==="count")&&!(gu>0))note.textContent="Enter grams per "+unitShort(u,1)+".";
   else if(u==="g")note.textContent="";
   else if(u==="serving")note.textContent="= "+r0(grams)+"g"+(pend.sv?" (1 serving = "+fmtAmt(pend.sv)+"g)":"");
-  else note.textContent="≈ "+r0(grams)+"g ("+fmtAmt(gu)+"g per "+unitShort(u,1)+")"}
+  else note.textContent="≈ "+r0(grams)+"g"}
 var labelInitial=null,labelBasisGrams=0;
 $("#label-edit").onclick=function(){if(!pend||!barcodeKey(pend.barcode))return;var a=parseFloat($("#pg").value),gu=pGu(),grams=a*gu;
   if(!(a>0&&gu>0&&isFinite(grams))){toast("Enter a valid amount and grams per unit first");return}
@@ -915,7 +962,7 @@ $("#label-edit").onclick=function(){if(!pend||!barcodeKey(pend.barcode))return;v
   labelInitial={};["k","p","c","f"].forEach(function(key){var v=Number((pend[key]*grams/100).toFixed(2));$("#label-"+key).value=String(v);labelInitial[key]=String(v)});
   $("#label-msg").textContent="";$("#label-reset").hidden=!pend.corrected;$("#label-dialog").showModal()};
 $("#label-cancel").onclick=function(){$("#label-dialog").close()};
-$("#label-reset").onclick=function(){if(!pend)return;var key=barcodeKey(pend.barcode);if(key&&S.barcodeNutrition)delete S.barcodeNutrition[key];var b=pend.baseNutrition;pend.k=b.k;pend.p=b.p;pend.c=b.c;pend.f=b.f;pend.corrected=false;save();productInfo();upd();$("#label-dialog").close()};
+$("#label-reset").onclick=function(){if(!pend)return;var key=barcodeKey(pend.barcode);if(key){if(!S.barcodeNutrition||typeof S.barcodeNutrition!=="object"||Array.isArray(S.barcodeNutrition))S.barcodeNutrition={};S.barcodeNutrition[key]=null}var b=pend.baseNutrition;pend.k=b.k;pend.p=b.p;pend.c=b.c;pend.f=b.f;pend.corrected=false;save();productInfo();upd();$("#label-dialog").close()};
 $("#label-save").onclick=function(){if(!pend||!labelInitial||!(labelBasisGrams>0))return;var n={},invalid=false;
   ["k","p","c","f"].forEach(function(key){var raw=$("#label-"+key).value.trim(),v=Number(raw);if(raw===""||!isFinite(v)||v<0||v>100000){invalid=true;return}n[key]=raw===labelInitial[key]?pend[key]:v*100/labelBasisGrams});
   if(invalid||!validNutrition(n)){$("#label-msg").textContent="Enter a valid nonnegative number for each value.";$("#label-msg").className="msg err";return}
@@ -932,7 +979,7 @@ $("#dec").onclick=function(){pNudge(-1)};
 $("#inc").onclick=function(){pNudge(1)};
 $("#pc").onclick=function(){closeSheet()};
 $("#pgo").onclick=function(){if(!pend)return;var a=parseFloat($("#pg").value)||0,gu=pGu(),grams=a*gu,x=grams/100;if(!(a>0&&grams>0)){upd();return}
-  if(pend.barcode&&/^\d{6,14}$/.test(pend.barcode)){if(!S.barcodeServings||typeof S.barcodeServings!=="object"||Array.isArray(S.barcodeServings))S.barcodeServings={};S.barcodeServings[pend.barcode]={a:a,u:$("#pu").value||"g",gu:gu};save()}
+  if(pend.barcode&&/^\d{6,14}$/.test(pend.barcode)){if(!S.barcodeServings||typeof S.barcodeServings!=="object"||Array.isArray(S.barcodeServings))S.barcodeServings={};var key=barcodeKey(pend.barcode);if(key!==pend.barcode)delete S.barcodeServings[pend.barcode];S.barcodeServings[key]={a:a,u:$("#pu").value||"g",gu:gu};save()}
   addEntry(pend.n,pend.k*x,pend.p*x,pend.c*x,pend.f*x,formatQ(a,$("#pu").value||"g"),pend.i,"",gu);closeSheet()};
 function qmsg(t,err){var m=$("#qmsg");m.textContent=t;m.className="msg"+(err?" err":"")}
 /* "All" tab: empty box -> recents underneath. Typing -> My Food matches show
@@ -951,7 +998,7 @@ function doSearch(q,my,ln){var o=$("#qdb");o.textContent="";qmsg("Searching...")
     if(!list.length){qmsg(ln?"No database matches \u2014 you can create it below.":"No matches for \u201c"+q+"\u201d \u2014 you can create it below.",!ln);return}qmsg("");
     var h=el("h2",null,"Database");h.style.marginTop="6px";o.appendChild(h);
     list.forEach(function(f){var b=el("button","q"),d=el("div");b.style.cssText="width:100%;text-align:left;min-height:60px";d.appendChild(el("b",null,f.n));d.appendChild(el("span",null,(f.b?f.b+", ":"")+r0(f.k)+" cal per 100g"));
-      b.type="button";b.appendChild(thumb(f.i,f.n,44));b.appendChild(d);b.onclick=function(){show(f)};o.appendChild(b)})
+      b.type="button";b.appendChild(thumb(f.i,f.n,44));b.appendChild(d);b.onclick=function(){barcodeReady.then(function(){if($("#add").open&&curTab==="search"&&!manualMode&&!scanMode)show(f)})};o.appendChild(b)})
   }).catch(function(){if(my!==qSeq)return;qmsg(ln?"Database search failed \u2014 your foods are above.":"Search failed. Check your connection, or create it below.",1)})}
 $("#q").oninput=function(){var q=this.value.trim();clearTimeout(qTimer);var my=++qSeq;if(!q){allHome();return}
   $("#qrecentwrap").hidden=true;$("#qdb").textContent="";var ln=renderLocal(q);
@@ -1056,11 +1103,12 @@ function edTotals(){var a=parseFloat($("#ed-a").value)||0;
   return{k:edPer.k*a,p:edPer.p*a,c:edPer.c*a,f:edPer.f*a}}
 function edChips(){var ch=$("#ed-ch");ch.textContent="";var vals=(edUnit==="g"||edUnit==="ml")?[50,100,150,200]:edUnit==="oz"?[1,2,4,8]:edUnit==="floz"?[4,8,12,16]:(edUnit==="kg"||edUnit==="lb")?[.25,.5,1,2]:edUnit==="tsp"?[1,2,3,6]:edUnit==="tbsp"?[1,2,3,4]:[.5,1,1.5,2];
   vals.forEach(function(v){var b=el("button",null,formatQ(v,edUnit));b.type="button";b.dataset.v=v;b.onclick=function(){$("#ed-a").value=v;edUpd()};ch.appendChild(b)})}
-function syncEdUnit(setDefault,guOverride){var needs=edNeedsGu(edUnit);$("#ed-gu-wrap").hidden=!needs;
+function syncEdUnit(setDefault,guOverride){var needs=edNeedsGu(edUnit);$("#ed-gu-wrap").hidden=true;$("#ed-gu-edit").hidden=!needs;$("#ed-gu-edit").setAttribute("aria-expanded","false");$("#ed-gu-edit").textContent="Edit grams per unit";
   if(needs){$("#ed-gu-lbl").textContent="Grams per "+unitShort(edUnit,1)+(edUnit==="serving"?" (for conversions)":"");
     if(guOverride!=null)$("#ed-gu").value=guOverride>0?fmtAmt(guOverride):"";
     else if(setDefault)$("#ed-gu").value=defaultGu(edUnit)>0?fmtAmt(defaultGu(edUnit)):""}
   edChips();edUpd()}
+$("#ed-gu-edit").onclick=function(){var open=$("#ed-gu-wrap").hidden;$("#ed-gu-wrap").hidden=!open;this.setAttribute("aria-expanded",String(open));this.textContent=open?"Done":"Edit grams per unit";if(open)$("#ed-gu").focus()};
 function openEdit(e,ing){edE=e;edIng=!!ing;var pq=parseQ(e),gu0=entryGu(e,pq.u);edUnit=pq.u;edOrigUnit=pq.u;
   edPer={k:e.k/pq.a,p:e.p/pq.a,c:e.c/pq.a,f:e.f/pq.a};
   edPerGram=gu0>0?{k:e.k/(pq.a*gu0),p:e.p/(pq.a*gu0),c:e.c/(pq.a*gu0),f:e.f/(pq.a*gu0)}:null;
@@ -1283,12 +1331,26 @@ $("#gsave").onclick=function(){var g=S.goal;g.k=parseFloat($("#g-k").value)||g.k
 
 /* Backup: copy / download out, paste / file restore in. Restore is validated
    and cleaned first, previewed, and only then replaces current data (with Undo). */
-$("#exp").onclick=function(){syncFoodDb();save();var txt=JSON.stringify(S);
+function backupSnapshot(){var copy=Object.assign({},S),merged=mergeBarcodes(siteBarcodes,S),local=barcodeSubset(S,true);copy.barcodeServings=merged.barcodeServings;copy.barcodeNutrition=merged.barcodeNutrition;Object.keys(local.barcodeNutrition).forEach(function(k){if(local.barcodeNutrition[k]===null)copy.barcodeNutrition[k]=null});return copy}
+$("#exp").onclick=function(){if(barcodeFileStatus==="loading"){toast("Barcode file is still loading — please try again");return}syncFoodDb();save();var txt=JSON.stringify(backupSnapshot());
   if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(txt).then(function(){toast("Backup copied")}).catch(function(){toast("Copy failed \u2014 use Download instead")})}
   else toast("Copy unavailable \u2014 use Download instead")};
-$("#expd").onclick=function(){syncFoodDb();save();var blob=new Blob([JSON.stringify(S,null,2)],{type:"application/json"}),a=el("a"),u=URL.createObjectURL(blob);
+$("#expd").onclick=function(){if(barcodeFileStatus==="loading"){toast("Barcode file is still loading — please try again");return}syncFoodDb();save();var blob=new Blob([JSON.stringify(backupSnapshot(),null,2)],{type:"application/json"}),a=el("a"),u=URL.createObjectURL(blob);
   a.href=u;a.download="calories-backup-"+dk(new Date())+".json";document.body.appendChild(a);a.click();a.remove();
   setTimeout(function(){URL.revokeObjectURL(u)},2000);toast("Backup downloaded")};
+function barcodeMessage(t,err){$("#barcode-msg").textContent=t;$("#barcode-msg").className="msg"+(err?" err":"")}
+async function exportBarcodeFile(backup){await barcodeReady;barcodeReady=loadSiteBarcodes();await barcodeReady;if(barcodeFileStatus==="error"){barcodeMessage("Could not check the existing website barcode file. Check your connection and try again so existing corrections are not lost.",true);return}
+  var data=mergeBarcodes(siteBarcodes,backup,S),count=Object.keys(data.barcodeServings).length+Object.keys(data.barcodeNutrition).length;
+  var hadSite=Object.keys(siteBarcodes.barcodeServings).length+Object.keys(siteBarcodes.barcodeNutrition).length;if(!count&&!hadSite){barcodeMessage("No saved barcode servings or label corrections were found.",true);return}
+  var payload={format:"calories-barcode-corrections",version:1,barcodeServings:data.barcodeServings,barcodeNutrition:data.barcodeNutrition};
+  var blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"}),a=el("a"),url=URL.createObjectURL(blob);a.href=url;a.download="food-corrections.json";document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(url)},2000);
+  barcodeMessage("Downloaded food-corrections.json. Upload it to your GitHub repository root. It contains barcodes and food values only.")}
+$("#barcode-export").onclick=function(){exportBarcodeFile(null)};
+$("#barcode-from-backup").onclick=function(){$("#barcode-backup-file").click()};
+$("#barcode-backup-file").onchange=function(){var f=this.files&&this.files[0];this.value="";if(!f)return;var reader=new FileReader();reader.onload=function(){try{var backup=JSON.parse(String(reader.result||""));
+  if(!backup||typeof backup!=="object"||Array.isArray(backup)||!("log" in backup||"goal" in backup||"recipes" in backup||"weights" in backup))throw new Error("not a full backup");
+  var found=barcodeSubset(backup,true);if(!Object.keys(found.barcodeServings).length&&!Object.keys(found.barcodeNutrition).length){barcodeMessage("That backup has no barcode-specific servings or label corrections.",true);return}exportBarcodeFile(backup)
+  }catch(e){barcodeMessage("That is not a valid Calories backup file.",true)}};reader.onerror=function(){barcodeMessage("Could not read that backup file.",true)};reader.readAsText(f)};
 var bkClean=null;
 function cleanBackup(txt){var o;try{o=JSON.parse(txt)}catch(e){return null}
   if(!o||typeof o!=="object"||Array.isArray(o))return null;
@@ -1320,7 +1382,7 @@ function cleanBackup(txt){var o;try{o=JSON.parse(txt)}catch(e){return null}
     data.recipes.forEach(function(r){r.ing.forEach(addf)});
     data.foods=data.foods.slice(0,1000)})();
   if(o.barcodeServings&&typeof o.barcodeServings==="object"&&!Array.isArray(o.barcodeServings))Object.keys(o.barcodeServings).slice(0,10000).forEach(function(code){var v=o.barcodeServings[code];if(!/^\d{6,14}$/.test(code)||!v||typeof v!=="object"||!Object.prototype.hasOwnProperty.call(UNIT,v.u))return;var a=Number(v.a),gu=cleanGu(v.gu);if(isFinite(a)&&a>0&&a<=100000&&gu)data.barcodeServings[code]={a:a,u:v.u,gu:gu}});
-  if(o.barcodeNutrition&&typeof o.barcodeNutrition==="object"&&!Array.isArray(o.barcodeNutrition))Object.keys(o.barcodeNutrition).slice(0,10000).forEach(function(code){var key=barcodeKey(code),v=o.barcodeNutrition[code];if(key&&validNutrition(v))data.barcodeNutrition[key]={k:v.k,p:v.p,c:v.c,f:v.f}});
+  if(o.barcodeNutrition&&typeof o.barcodeNutrition==="object"&&!Array.isArray(o.barcodeNutrition))Object.keys(o.barcodeNutrition).slice(0,10000).forEach(function(code){var key=barcodeKey(code),v=o.barcodeNutrition[code];if(key&&validNutrition(v))data.barcodeNutrition[key]={k:v.k,p:v.p,c:v.c,f:v.f};else if(key&&v===null)data.barcodeNutrition[key]=null});
   if(o.icons&&typeof o.icons==="object")Object.keys(o.icons).slice(0,1000).forEach(function(k){var kk=str(k,120).trim().toLowerCase();if(kk&&FICON[o.icons[k]])data.icons[kk]=o.icons[k]});
   if(o.profile&&typeof o.profile==="object"){var pr=o.profile,acts=["1.2","1.375","1.55","1.725","1.9"],paces=[-1000,-750,-500,-250,0,250,500];
     data.profile={sex:pr.sex==="male"?"male":"female",age:num(pr.age,120),h:num(pr.h,300),wkg:num(pr.wkg,1000),
@@ -1347,5 +1409,5 @@ syncFoodDb();save();setMeal(meal);view("diary");
 if(/^#recipe=/.test(location.hash)){var code=location.hash;history.replaceState(null,"",location.pathname+location.search);view("recipes");showImport(code)}
 })();
 </script>
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a53eab8eeda62e51',t:'MTc5MzU3NTY0Ng=='};var l=window.parent.location,o;try{o=new URL(l.origin).origin}catch(e){try{o=new URL(new URL(l.href).origin).origin}catch(e){o=''}}var u='/cdn-cgi/challenge-platform/scripts/jsd/main.js?ray=a53eab8eeda62e51',a=document.createElement('script');a.src=o?new URL(u,o).href:u;document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a53ebfe18a70982d',t:'MTc5MzU3NjQ3OA=='};var l=window.parent.location,o;try{o=new URL(l.origin).origin}catch(e){try{o=new URL(new URL(l.href).origin).origin}catch(e){o=''}}var u='/cdn-cgi/challenge-platform/scripts/jsd/main.js?ray=a53ebfe18a70982d',a=document.createElement('script');a.src=o?new URL(u,o).href:u;document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
